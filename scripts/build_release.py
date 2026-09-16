@@ -9,7 +9,7 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 PLUGIN_NAME = "sports-betting-expert"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILL_ROOT = REPO_ROOT / "skills" / PLUGIN_NAME
@@ -91,7 +91,7 @@ Use `canonical-skill.md` in Knowledge as the governing workflow. Select the mode
 
 ## Context
 
-Current schedules, odds, injuries, lineups and live state require current sources or a clearly labeled user-provided snapshot. Separate facts, reports, assumptions and assessment. Never invent a price, statistic, model run or claimed edge. The `priority-live-tennis` profile is off unless the user explicitly enables it. By default, pre-match tennis is allowed when the evidence is sufficient; tennis becomes live-only only while that profile is active.
+Current schedules, odds, injuries, lineups and live state require current sources or a clearly labeled user-provided snapshot. Separate facts, reports, assumptions and assessment. Never invent a price, statistic, model run or claimed edge. Never recommend a new pre-match tennis bet or include tennis in a pre-match accumulator; tennis betting selections are always live-only. The optional `priority-live-tennis` profile changes the sport screening order and is off unless the user explicitly enables it.
 
 ## Format
 
@@ -119,7 +119,7 @@ def build_gemini_zip(output: Path) -> None:
 def build_grok_adapter(output: Path) -> None:
     parts = [
         "# Sports Betting Expert — Grok Web Project Adapter\n",
-        "Upload this generated file to a Grok Project. Apply the canonical workflow below to requests inside that Project. It is not an account-wide skill. Default to Russian unless the user asks otherwise. The optional `priority-live-tennis` profile is inactive unless explicitly enabled.\n",
+        "Upload this generated file to a Grok Project. Apply the canonical workflow below to requests inside that Project. It is not an account-wide skill. Default to Russian unless the user asks otherwise. Tennis betting selections are always live-only. The optional `priority-live-tennis` sport-order profile is inactive unless explicitly enabled.\n",
         (SKILL_ROOT / "SKILL.md").read_text(),
         (SKILL_ROOT / "references/sources-and-methods.md").read_text(),
         (SKILL_ROOT / "references/markets-and-coupons.md").read_text(),

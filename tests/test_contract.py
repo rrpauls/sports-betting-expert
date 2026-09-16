@@ -26,13 +26,13 @@ class CanonicalContractTests(unittest.TestCase):
                 if "://" not in target and not target.startswith("#"):
                     self.assertTrue((source.parent / target).resolve().is_file(), f"{source}: {target}")
 
-    def test_optional_profile_is_not_a_universal_rule(self):
+    def test_tennis_gate_is_universal_and_profile_only_changes_priority(self):
         entrypoint = (SKILL / "SKILL.md").read_text()
         profile = (SKILL / "references/profiles/priority-live-tennis.md").read_text()
-        self.assertIn("No personal sport hierarchy or live-only restriction applies by default", entrypoint)
-        self.assertIn("In the default state, pre-match tennis is allowed", entrypoint)
-        self.assertIn("Only while that profile is active does tennis become live-only", entrypoint)
-        self.assertIn("Apply it only after explicit activation", profile)
+        self.assertIn("Never recommend a new pre-match tennis bet", entrypoint)
+        self.assertIn("Tennis betting selections are live-only", entrypoint)
+        self.assertIn("The profile changes the screening order", entrypoint)
+        self.assertIn("live-only tennis gate applies whether or not this profile is active", profile)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # Install as a Gemini Gem
 
-1. Extract `sports-betting-expert-gemini-v1.0.1.zip`.
+1. Extract `sports-betting-expert-gemini-v1.0.2.zip`.
 2. At `gemini.google.com`, open **Explore Gems** and choose **New Gem**.
 3. Name it `Sports Betting Expert`.
 4. Copy the complete contents of `gemini-gem-instructions.md` into **Instructions**.

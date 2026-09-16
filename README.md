@@ -14,7 +14,7 @@ The maintained source is [`skills/sports-betting-expert`](skills/sports-betting-
 | Gemini Web | Gem instructions and Knowledge ZIP | Persistent only inside the selected Gem |
 | Grok Web | Project Markdown | Persistent only inside the Project |
 
-See [INSTALL.md](INSTALL.md) for exact steps. `priority-live-tennis` is an optional profile and is not active in the universal skill by default.
+See [INSTALL.md](INSTALL.md) for exact steps. Tennis betting selections are always live-only. `priority-live-tennis` is an optional sport-order profile and is not active by default.
 
 ## Build and validate
 
