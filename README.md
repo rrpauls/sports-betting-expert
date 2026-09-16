@@ -16,6 +16,22 @@ The maintained source is [`skills/sports-betting-expert`](skills/sports-betting-
 
 See [INSTALL.md](INSTALL.md) for exact steps. Tennis betting selections are always live-only. `priority-live-tennis` is an optional sport-order profile and is not active by default.
 
+## Verified release status
+
+Status for release `v1.0.2` as of 2026-09-17:
+
+| Surface | Evidence | Result |
+|---|---|---|
+| Canonical skill and calculator | Unit, contract and reproducible-build tests | Passed, 10/10 |
+| Codex | Marketplace install at ref `v1.0.2`; plugin and nested-skill validation | Installed, enabled and passed |
+| Portable package | ZIP layout and artifact validation; `claude plugin validate --strict` | Passed |
+| ChatGPT Web | Installed skill content plus relevant, tennis-gate, arithmetic and unrelated-query smoke prompts | Passed |
+| Claude Web | Uploaded portable skill plus tennis-gate, arithmetic and unrelated-query smoke prompts | Passed |
+| Gemini Gem | Instructions and four Knowledge files replaced with `v1.0.2`; Gem-scoped behavior checked manually | Passed (user-verified) |
+| Grok Web | Project adapter replaced with `v1.0.2`; Project-scoped behavior checked manually | Passed (user-verified) |
+
+Gemini remains Gem-scoped and Grok remains Project-scoped. Neither adapter is presented as an account-wide automatically invoked skill.
+
 ## Build and validate
 
 ```bash
