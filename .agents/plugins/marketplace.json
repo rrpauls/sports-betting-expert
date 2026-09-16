@@ -1,0 +1,17 @@
+{
+  "name": "sports-betting-expert",
+  "interface": {"displayName": "Sports Betting Expert"},
+  "plugins": [
+    {
+      "name": "sports-betting-expert",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/rrpauls/sports-betting-expert.git",
+        "ref": "v1.0.0"
+      },
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+      "category": "Productivity"
+    }
+  ]
+}
+

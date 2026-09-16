@@ -1,0 +1,9 @@
+interface:
+  display_name: "Sports Betting Expert"
+  short_description: "Разбор ставок, экспрессов, купонов и live-матчей"
+  default_prompt: "Используй $sports-betting-expert, чтобы проверить коэффициенты, обоснованность value и главные риски по-русски."
+  icon_small: "./assets/icon.svg"
+  icon_large: "./assets/icon.svg"
+  brand_color: "#166534"
+policy:
+  allow_implicit_invocation: true

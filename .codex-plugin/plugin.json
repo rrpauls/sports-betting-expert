@@ -1,0 +1,32 @@
+{
+  "name": "sports-betting-expert",
+  "version": "1.0.0",
+  "description": "Evidence-led sports betting analysis for matches, odds, coupons, accumulators, and live positions.",
+  "author": {
+    "name": "rrpauls",
+    "url": "https://github.com/rrpauls"
+  },
+  "homepage": "https://github.com/rrpauls/sports-betting-expert",
+  "repository": "https://github.com/rrpauls/sports-betting-expert",
+  "license": "MIT",
+  "keywords": ["sports-betting", "odds", "expected-value", "bankroll", "live-betting"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Sports Betting Expert",
+    "shortDescription": "Разбор ставок, экспрессов, купонов и live-матчей",
+    "longDescription": "Research-led analysis of sports markets, offered odds, settlement rules, accumulators, coupons, live positions, bankroll decisions, and performance records, with explicit uncertainty and current-source checks.",
+    "developerName": "rrpauls",
+    "category": "Productivity",
+    "capabilities": ["Current-data research", "Odds and EV analysis", "Coupon and live-position review"],
+    "websiteURL": "https://github.com/rrpauls/sports-betting-expert",
+    "composerIcon": "./skills/sports-betting-expert/assets/icon.svg",
+    "logo": "./skills/sports-betting-expert/assets/icon.svg",
+    "logoDark": "./skills/sports-betting-expert/assets/icon.svg",
+    "defaultPrompt": [
+      "Проверь этот матч и цену на наличие обоснованного value.",
+      "Разбери мой экспресс и найди самое слабое плечо.",
+      "Оцени live-позицию по текущему состоянию матча."
+    ]
+  }
+}
+
