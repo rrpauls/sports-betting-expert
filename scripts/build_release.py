@@ -9,7 +9,7 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 PLUGIN_NAME = "sports-betting-expert"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILL_ROOT = REPO_ROOT / "skills" / PLUGIN_NAME
@@ -91,7 +91,7 @@ Use `canonical-skill.md` in Knowledge as the governing workflow. Select the mode
 
 ## Context
 
-Current schedules, odds, injuries, lineups and live state require current sources or a clearly labeled user-provided snapshot. Separate facts, reports, assumptions and assessment. Never invent a price, statistic, model run or claimed edge. The `priority-live-tennis` profile is off unless the user explicitly enables it.
+Current schedules, odds, injuries, lineups and live state require current sources or a clearly labeled user-provided snapshot. Separate facts, reports, assumptions and assessment. Never invent a price, statistic, model run or claimed edge. The `priority-live-tennis` profile is off unless the user explicitly enables it. By default, pre-match tennis is allowed when the evidence is sufficient; tennis becomes live-only only while that profile is active.
 
 ## Format
 
@@ -150,4 +150,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

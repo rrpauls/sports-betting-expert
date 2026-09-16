@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "sports-betting-expert",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Evidence-led sports betting analysis for matches, odds, coupons, accumulators, and live positions.",
   "author": {
     "name": "rrpauls",
@@ -33,4 +33,3 @@
     }
   }
 }
-

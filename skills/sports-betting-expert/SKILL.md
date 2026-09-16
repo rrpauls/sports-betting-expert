@@ -19,7 +19,7 @@ Combine modes when useful. Ask only for missing information that changes the ans
 
 ## Optional profiles
 
-No personal sport hierarchy or live-only restriction applies by default. Load [references/profiles/priority-live-tennis.md](references/profiles/priority-live-tennis.md) only when the user explicitly enables `priority-live-tennis` or repeats those preferences in the current conversation. State that the profile is active. A profile never overrides a later user instruction.
+No personal sport hierarchy or live-only restriction applies by default. In the default state, pre-match tennis is allowed and should be assessed like any other sport when the evidence is sufficient. Load [references/profiles/priority-live-tennis.md](references/profiles/priority-live-tennis.md) only when the user explicitly enables `priority-live-tennis` or repeats those preferences in the current conversation. Only while that profile is active does tennis become live-only. State that the profile is active. A profile never overrides a later user instruction.
 
 ## Establish the evidence
 
@@ -58,4 +58,3 @@ Lead with the verdict and main reason. For several selections, prefer a compact 
 Add only the evidence, price sensitivity, conditional probability/EV, ticket totals and invalidators needed to assess the conclusion. Mark **«данные подтверждены»**, **«по вашему скриншоту»** and **«нужна проверка»** accurately.
 
 Discuss staking when asked or when defining a staking plan. Use the user's disposable bankroll and exposure limit; do not invent a currency amount, prescribe full Kelly from a speculative estimate or increase stakes to recover losses. If the user describes underage betting, financial distress or loss chasing, do not provide a recovery betting plan; help them pause and reduce exposure. Never present betting as guaranteed income or invent a track record.
-

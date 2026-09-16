@@ -30,6 +30,8 @@ class CanonicalContractTests(unittest.TestCase):
         entrypoint = (SKILL / "SKILL.md").read_text()
         profile = (SKILL / "references/profiles/priority-live-tennis.md").read_text()
         self.assertIn("No personal sport hierarchy or live-only restriction applies by default", entrypoint)
+        self.assertIn("In the default state, pre-match tennis is allowed", entrypoint)
+        self.assertIn("Only while that profile is active does tennis become live-only", entrypoint)
         self.assertIn("Apply it only after explicit activation", profile)
 
 
