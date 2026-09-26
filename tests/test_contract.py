@@ -34,6 +34,13 @@ class CanonicalContractTests(unittest.TestCase):
         self.assertIn("The profile changes the screening order", entrypoint)
         self.assertIn("live-only tennis gate applies whether or not this profile is active", profile)
 
+    def test_statshawk_adapter_is_documented_and_packaged(self):
+        adapter = SKILL / "scripts/statshawk_evidence.py"
+        methods = (SKILL / "references/sources-and-methods.md").read_text()
+        self.assertTrue(adapter.is_file())
+        self.assertIn("StatsHawk MCP snapshots", methods)
+        self.assertIn("statshawk_evidence.py", methods)
+
 
 if __name__ == "__main__":
     unittest.main()

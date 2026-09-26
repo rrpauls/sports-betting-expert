@@ -8,6 +8,23 @@ For offered prices, prioritize the user's named bookmaker or exchange. An odds a
 
 Provider access changes. Treat provider names as starting points rather than promises of free access. If a source is unavailable, change sources or disclose the gap; never reconstruct missing current statistics from memory.
 
+### StatsHawk MCP snapshots
+
+When the host exposes the read-only StatsHawk MCP, use it for structured game discovery, rosters, standings, injury history, box scores, play-by-play, player-stat capabilities, and supported player statistics. It does not by itself prove a bookmaker price, lineup confirmation, forecast probability, or wagering edge.
+
+Preserve a bounded snapshot before analysis when reproducibility matters:
+
+```bash
+python3 scripts/statshawk_evidence.py \
+  --tool get_stat_capabilities \
+  --league mlb \
+  --observed-at 2026-09-26T12:00:00+03:00 \
+  --input statshawk-result.json \
+  --output statshawk-evidence.json
+```
+
+The adapter accepts supported read-only tool output, keeps an explicit allowlist of sports fields, rejects credential/session fields, records the observation time in UTC, and writes mode `0600`. Keep the generated snapshot out of release packages and repositories when it contains user-specific research. Cite the authoritative provider or official source in the final analysis; the local snapshot is an audit aid, not a public citation.
+
 ## Sport-specific evidence
 
 | Sport | Decision-relevant checks | Useful starting points beyond official news |
