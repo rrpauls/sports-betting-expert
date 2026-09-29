@@ -11,10 +11,12 @@ The maintained source is [`skills/sports-betting-expert`](skills/sports-betting-
 | Codex | Git marketplace or Codex installer ZIP | Automatic after plugin installation |
 | ChatGPT Web | Portable skill ZIP | Automatic after upload and enablement |
 | Claude Web | Same portable skill ZIP | Automatic after upload and enablement |
-| Gemini Web | Gem instructions and Knowledge ZIP | Persistent only inside the selected Gem |
+| Gemini Web | Canonical `SKILL.md` / skill ZIP | Automatic when relevant after import and enablement; rollout/account availability applies |
 | Grok Web | Project Markdown | Persistent only inside the Project |
 
 See [INSTALL.md](INSTALL.md) for exact steps. Tennis betting selections are always live-only. `priority-live-tennis` is an optional sport-order profile and is not active by default.
+
+Gemini Apps now support native reusable skills, including `SKILL.md` import, automatic relevance-based use, and combining multiple skills. Google is transitioning Gems to skills; the dedicated Gemini Gem bundle published with `v1.0.2` is therefore retained only as a legacy release artifact. See Google's [Create & manage skills](https://support.google.com/gemini/answer/17094296?hl=en) and [Gems-to-skills transition](https://support.google.com/gemini/answer/18560919?hl=en) documentation. Availability can vary by account and rollout.
 
 ## Verified release status
 
@@ -27,10 +29,10 @@ Status for release `v1.0.2` as of 2026-09-17:
 | Portable package | ZIP layout and artifact validation; `claude plugin validate --strict` | Passed |
 | ChatGPT Web | Installed skill content plus relevant, tennis-gate, arithmetic and unrelated-query smoke prompts | Passed |
 | Claude Web | Uploaded portable skill plus tennis-gate, arithmetic and unrelated-query smoke prompts | Passed |
-| Gemini Gem | Instructions and four Knowledge files replaced with `v1.0.2`; Gem-scoped behavior checked manually | Passed (user-verified) |
+| Gemini Gem (legacy `v1.0.2`) | Instructions and four Knowledge files replaced with `v1.0.2`; Gem-scoped behavior checked manually | Passed (user-verified) |
 | Grok Web | Project adapter replaced with `v1.0.2`; Project-scoped behavior checked manually | Passed (user-verified) |
 
-Gemini remains Gem-scoped and Grok remains Project-scoped. Neither adapter is presented as an account-wide automatically invoked skill.
+The table above records the historical `v1.0.2` verification state. For current Gemini installations, prefer the canonical skill path described in [INSTALL-GEMINI.md](INSTALL-GEMINI.md). Native Gemini Skills are platform-supported but were introduced after the `v1.0.2` verification run, so this repository does not claim a separate Gemini Skills smoke-test result for that release. Grok remains Project-scoped.
 
 ## Build and validate
 

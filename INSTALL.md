@@ -26,7 +26,9 @@ Enable code execution/file creation, open **Customize → Skills → Add → Cre
 
 ## Gemini Web
 
-Follow [INSTALL-GEMINI.md](INSTALL-GEMINI.md). A Gem must be selected; it is not injected into unrelated Gemini chats.
+Gemini Apps now support native skills based on `SKILL.md`. Follow [INSTALL-GEMINI.md](INSTALL-GEMINI.md) and prefer the canonical skill over the older Gem adapter. Gemini can automatically apply an enabled skill when it is relevant, and skills can be combined. Availability still depends on Google's account/rollout state.
+
+The published `sports-betting-expert-gemini-v1.0.2.zip` remains a legacy Gem bundle for the historical `v1.0.2` release; it is not the preferred installation path when native Gemini Skills are available.
 
 ## Grok Web
 
