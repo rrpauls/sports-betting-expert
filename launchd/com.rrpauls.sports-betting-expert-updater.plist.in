@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.rrpauls.sports-betting-expert-updater</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>@PYTHON_EXECUTABLE@</string>
+		<string>@UPDATER_SCRIPT@</string>
+		<string>--codex</string>
+		<string>@CODEX_EXECUTABLE@</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>@HOME_PATH@</string>
+		<key>PATH</key>
+		<string>@PATH_VALUE@</string>
+	</dict>
+	<key>StartInterval</key>
+	<integer>86400</integer>
+	<key>StandardOutPath</key>
+	<string>@LOG_OUT@</string>
+	<key>StandardErrorPath</key>
+	<string>@LOG_ERROR@</string>
+</dict>
+</plist>

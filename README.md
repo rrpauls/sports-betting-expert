@@ -8,7 +8,7 @@ The maintained source is [`skills/sports-betting-expert`](skills/sports-betting-
 
 | Host | Artifact | Invocation boundary |
 |---|---|---|
-| Codex | Git marketplace or Codex installer ZIP | Automatic after plugin installation |
+| Codex / ChatGPT desktop | Git marketplace or Codex installer ZIP | Automatic after installation; scheduled checker tracks GitHub `main` |
 | ChatGPT Web | Portable skill ZIP | Automatic after upload and enablement |
 | Claude Web | Same portable skill ZIP | Automatic after upload and enablement |
 | Gemini Web | Canonical `SKILL.md` / skill ZIP | Automatic when relevant after import and enablement; rollout/account availability applies |
@@ -18,6 +18,10 @@ See [INSTALL.md](INSTALL.md) for exact steps. Tennis betting selections are alwa
 
 Gemini Apps now support native reusable skills, including `SKILL.md` import, automatic relevance-based use, and combining multiple skills. Google is transitioning Gems to skills; the dedicated Gemini Gem bundle published with `v1.0.2` is therefore retained only as a legacy release artifact. See Google's [Create & manage skills](https://support.google.com/gemini/answer/17094296?hl=en) and [Gems-to-skills transition](https://support.google.com/gemini/answer/18560919?hl=en) documentation. Availability can vary by account and rollout.
 
+## Automatic Codex and ChatGPT desktop updates
+
+The Codex and ChatGPT desktop personal marketplace entries point to `https://github.com/rrpauls/sports-betting-expert` on `main`. `scripts/update_plugin.py` checks that branch daily, validates a candidate plugin and its test suite, and compares strict semantic versions before changing the installation. A newer valid version uses `codex plugin marketplace upgrade` for a Git marketplace. For a local archive install, the checker atomically refreshes the local plugin source folder and uses `codex plugin add` to refresh its cache. Same-version, older, or invalid candidates are left unapplied. Restart ChatGPT desktop after an update to load the new local plugin files. See [INSTALL.md](INSTALL.md) to enable the macOS LaunchAgent.
+
 ## Verified release status
 
 Status for release `v1.0.2` as of 2026-09-17:
@@ -25,7 +29,7 @@ Status for release `v1.0.2` as of 2026-09-17:
 | Surface | Evidence | Result |
 |---|---|---|
 | Canonical skill and calculator | Unit, contract and reproducible-build tests | Passed, 10/10 |
-| Codex | Marketplace install at ref `v1.0.2`; plugin and nested-skill validation | Installed, enabled and passed |
+| Codex | Marketplace install; plugin and nested-skill validation | Installed, enabled and passed |
 | Portable package | ZIP layout and artifact validation; `claude plugin validate --strict` | Passed |
 | ChatGPT Web | Installed skill content plus relevant, tennis-gate, arithmetic and unrelated-query smoke prompts | Passed |
 | Claude Web | Uploaded portable skill plus tennis-gate, arithmetic and unrelated-query smoke prompts | Passed |

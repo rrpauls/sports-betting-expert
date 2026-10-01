@@ -17,7 +17,7 @@ class CanonicalContractTests(unittest.TestCase):
         self.assertEqual(portable["name"], codex["name"])
         self.assertEqual(codex["version"], portable["version"])
         self.assertEqual(marketplace["plugins"][0]["name"], codex["name"])
-        self.assertEqual(marketplace["plugins"][0]["source"]["ref"], f"v{codex['version']}")
+        self.assertEqual(marketplace["plugins"][0]["source"]["ref"], "main")
 
     def test_markdown_links_resolve_inside_skill(self):
         markdown_files = [SKILL / "SKILL.md", *SKILL.joinpath("references").rglob("*.md")]
