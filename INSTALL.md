@@ -3,13 +3,31 @@
 ## Codex
 
 ```bash
-codex plugin marketplace add rrpauls/sports-betting-expert --ref v1.0.2
+codex plugin marketplace add rrpauls/sports-betting-expert --ref main
 codex plugin add sports-betting-expert@sports-betting-expert
 ```
 
+The repository and personal marketplace catalogs point the plugin source at GitHub `main`. The daily checker handles GitHub-link installs through the marketplace upgrade command; for an archive install, it atomically refreshes the installed local source folder and then uses `codex plugin add` to refresh Codex's cache.
+
+Run a one-time check with:
+
+```bash
+pyenv exec python scripts/update_plugin.py
+```
+
+For daily checks on macOS, install and load the LaunchAgent from the repository root:
+
+```bash
+mkdir -p ~/Library/LaunchAgents
+cp launchd/com.rrpauls.sports-betting-expert-updater.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.rrpauls.sports-betting-expert-updater.plist
+```
+
+It checks once per day while the user session is logged in. A candidate is applied only when its version is newer and its manifest, nested skill, artifact validation, and test suite pass. Git marketplaces use `codex plugin marketplace upgrade`; local archive installs refresh their source folder atomically, then run `codex plugin add`. Restart ChatGPT desktop after an update to load the new local plugin files.
+
 Start a new Codex task after installation so the new skill catalog is loaded.
 
-For an offline install, extract `sports-betting-expert-codex-v1.0.2.zip` and run:
+For an archive install, extract `sports-betting-expert-codex-v1.0.2.zip` and run:
 
 ```bash
 codex plugin marketplace add ./sports-betting-expert-codex
