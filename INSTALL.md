@@ -7,7 +7,7 @@ codex plugin marketplace add rrpauls/sports-betting-expert --ref main
 codex plugin add sports-betting-expert@sports-betting-expert
 ```
 
-The repository and personal marketplace catalogs point the plugin source at GitHub `main`. The daily checker handles GitHub-link installs through the marketplace upgrade command; for an archive install, it atomically refreshes the installed local source folder and then uses `codex plugin add` to refresh Codex's cache.
+The repository and personal marketplace catalogs point the plugin source at GitHub `main`. For Git marketplace installs, the daily checker validates Codex's refreshed snapshot and installs only when it resolves to the same commit that passed validation; if `main` moves during the check, the update waits for the next run. Direct Git installs without a verifiable marketplace snapshot are left unchanged. For an archive install, the checker verifies the installed repository identity, replaces the complete local source tree, and then uses `codex plugin add` to refresh Codex's cache.
 
 Run a one-time check with:
 

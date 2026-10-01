@@ -13,6 +13,7 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 
 PLUGIN_NAME = "sports-betting-expert"
@@ -78,7 +79,41 @@ def load_installed(codex: str) -> list[dict[str, Any]]:
     return [item for item in state.get("installed", []) if item.get("name") == PLUGIN_NAME]
 
 
-def read_candidate_version(root: Path) -> str:
+def repository_identity(value: Any) -> tuple[str, str] | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = urlsplit(value.strip())
+    except ValueError:
+        return None
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or port is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        return None
+    path = parsed.path.strip("/")
+    if path.endswith(".git"):
+        path = path[:-4]
+    if len(path.split("/")) != 2:
+        return None
+    return parsed.hostname.casefold(), path.casefold()
+
+
+def repository_matches(value: Any, expected: str) -> bool:
+    expected_identity = repository_identity(expected)
+    return expected_identity is not None and repository_identity(value) == expected_identity
+
+
+def read_candidate_version(root: Path, repository: str = REPOSITORY_URL) -> str:
     manifest_path = root / "plugin.json"
     skill_path = root / "skills" / PLUGIN_NAME / "SKILL.md"
     if not manifest_path.is_file() or not skill_path.is_file():
@@ -89,6 +124,8 @@ def read_candidate_version(root: Path) -> str:
         raise RuntimeError("candidate plugin.json is unreadable or invalid JSON") from exc
     if manifest.get("name") != PLUGIN_NAME:
         raise RuntimeError(f"candidate plugin name must be {PLUGIN_NAME!r}")
+    if not repository_matches(manifest.get("repository"), repository):
+        raise RuntimeError("candidate plugin repository does not match the configured repository")
     version = manifest.get("version")
     if not isinstance(version, str):
         raise RuntimeError("candidate plugin version must be a string")
@@ -121,7 +158,11 @@ def validate_candidate(root: Path) -> None:
 
 
 def refresh_local_archive(
-    codex: str, installed: dict[str, Any], candidate: Path, candidate_version: str
+    codex: str,
+    installed: dict[str, Any],
+    candidate: Path,
+    candidate_version: str,
+    repository: str,
 ) -> None:
     marketplace_name = installed.get("marketplaceName")
     if not isinstance(marketplace_name, str) or not marketplace_name:
@@ -140,24 +181,20 @@ def refresh_local_archive(
         installed_manifest = json.loads((target / "plugin.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise RuntimeError("local archive plugin path has no valid plugin manifest") from exc
-    if installed_manifest.get("name") != PLUGIN_NAME:
-        raise RuntimeError("local archive plugin path identity does not match")
+    if (
+        installed_manifest.get("name") != PLUGIN_NAME
+        or not repository_matches(installed_manifest.get("repository"), repository)
+    ):
+        raise RuntimeError("local archive plugin path identity/repository does not match")
 
     with tempfile.TemporaryDirectory(prefix=f".{target.name}.update-", dir=target.parent) as temporary:
         staging = Path(temporary) / "new"
         backup = Path(temporary) / "old"
-        shutil.copytree(target, staging)
-        for relative in ("plugin.json", ".codex-plugin", "skills"):
-            source_item = candidate / relative
-            target_item = staging / relative
-            if target_item.is_dir():
-                shutil.rmtree(target_item)
-            elif target_item.exists():
-                target_item.unlink()
-            if source_item.is_dir():
-                shutil.copytree(source_item, target_item)
-            else:
-                shutil.copy2(source_item, target_item)
+        shutil.copytree(
+            candidate,
+            staging,
+            ignore=shutil.ignore_patterns(".git"),
+        )
         os.replace(target, backup)
         try:
             os.replace(staging, target)
@@ -179,19 +216,100 @@ def refresh_local_archive(
             raise
 
 
-def refresh(codex: str, installed: dict[str, Any], candidate: Path, candidate_version: str) -> None:
+def marketplace_snapshot(
+    codex: str, marketplace_name: str, repository: str
+) -> tuple[Path, str]:
+    output = run([codex, "plugin", "marketplace", "list", "--json"], capture=True).stdout
+    try:
+        marketplaces = json.loads(output).get("marketplaces", [])
+    except (json.JSONDecodeError, AttributeError) as exc:
+        raise RuntimeError("Codex returned an invalid marketplace list") from exc
+    marketplace = next(
+        (item for item in marketplaces if item.get("name") == marketplace_name), None
+    )
+    if not marketplace:
+        raise RuntimeError(f"Codex did not report marketplace {marketplace_name!r}")
+    source = marketplace.get("marketplaceSource") or {}
+    if (
+        source.get("sourceType") != "git"
+        or not repository_matches(source.get("source"), repository)
+    ):
+        raise RuntimeError("configured marketplace is not the expected Git repository")
+    root_value = marketplace.get("root")
+    if not isinstance(root_value, str) or not root_value:
+        raise RuntimeError("Codex did not report the Git marketplace snapshot path")
+    root = Path(root_value).resolve(strict=True)
+    remote = run(
+        ["git", "-C", str(root), "remote", "get-url", "origin"], capture=True
+    ).stdout.strip()
+    if not repository_matches(remote, repository):
+        raise RuntimeError("Git marketplace checkout origin does not match the repository")
+    revision = run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], capture=True
+    ).stdout.strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise RuntimeError("Git marketplace snapshot has no valid commit revision")
+    status = run(
+        ["git", "-C", str(root), "status", "--porcelain=v1", "--untracked-files=all"],
+        capture=True,
+    ).stdout.splitlines()
+    unexpected = [line for line in status if line[3:] != ".codex-marketplace-install.json"]
+    if unexpected:
+        raise RuntimeError("Git marketplace snapshot contains files outside its validated commit")
+    return root, revision
+
+
+def refresh_git_marketplace(
+    codex: str,
+    marketplace_name: str,
+    candidate_version: str,
+    candidate_revision: str,
+    repository: str,
+) -> None:
+    run([codex, "plugin", "marketplace", "upgrade", marketplace_name, "--json"])
+    snapshot, snapshot_revision = marketplace_snapshot(codex, marketplace_name, repository)
+    if snapshot_revision != candidate_revision:
+        raise RuntimeError(
+            "Git marketplace moved after candidate validation; no plugin was installed. "
+            "Retry the update check to validate the refreshed revision."
+        )
+    if read_candidate_version(snapshot, repository) != candidate_version:
+        raise RuntimeError("Git marketplace snapshot version does not match the validated candidate")
+    validate_candidate(snapshot)
+    if marketplace_snapshot(codex, marketplace_name, repository)[1] != candidate_revision:
+        raise RuntimeError("Git marketplace snapshot changed during validation; no plugin was installed")
+    run([codex, "plugin", "add", f"{PLUGIN_NAME}@{marketplace_name}", "--json"])
+
+
+def refresh(
+    codex: str,
+    installed: dict[str, Any],
+    candidate: Path,
+    candidate_version: str,
+    candidate_revision: str,
+    repository: str,
+) -> None:
     marketplace_name = installed.get("marketplaceName")
     if not isinstance(marketplace_name, str) or not marketplace_name:
         raise RuntimeError("Codex did not report the installed plugin marketplace")
     source = installed.get("source") or {}
     if source.get("source") == "local":
-        refresh_local_archive(codex, installed, candidate, candidate_version)
+        refresh_local_archive(codex, installed, candidate, candidate_version, repository)
         return
     marketplace_source = installed.get("marketplaceSource") or {}
     if marketplace_source.get("sourceType") == "git":
-        run([codex, "plugin", "marketplace", "upgrade", marketplace_name, "--json"])
+        refresh_git_marketplace(
+            codex,
+            marketplace_name,
+            candidate_version,
+            candidate_revision,
+            repository,
+        )
+    elif source.get("source") == "git":
+        raise RuntimeError(
+            "cannot safely refresh a direct Git plugin without a verifiable Git marketplace snapshot"
+        )
     else:
-        # A GitHub plugin installed through a local archive catalog still uses the native add flow.
         run([codex, "plugin", "add", f"{PLUGIN_NAME}@{marketplace_name}", "--json"])
 
 
@@ -229,7 +347,12 @@ def main() -> int:
                     str(candidate_root),
                 ]
             )
-            candidate_version = read_candidate_version(candidate_root)
+            candidate_revision = run(
+                ["git", "-C", str(candidate_root), "rev-parse", "HEAD"], capture=True
+            ).stdout.strip()
+            if not re.fullmatch(r"[0-9a-f]{40}", candidate_revision):
+                raise RuntimeError("Git did not report a valid candidate commit revision")
+            candidate_version = read_candidate_version(candidate_root, args.repository)
             outdated = [
                 item
                 for item in installations
@@ -243,7 +366,14 @@ def main() -> int:
             validate_candidate(candidate_root)
             print(f"Validated newer version {candidate_version}; updating from main.")
             for installed in outdated:
-                refresh(args.codex, installed, candidate_root, candidate_version)
+                refresh(
+                    args.codex,
+                    installed,
+                    candidate_root,
+                    candidate_version,
+                    candidate_revision,
+                    args.repository,
+                )
 
         updated = load_installed(args.codex)
         stale = [
