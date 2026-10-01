@@ -50,6 +50,16 @@ def main() -> None:
         }
         if not required.issubset(archive.namelist()):
             raise ValueError("portable skill is incomplete")
+    with ZipFile(codex) as archive:
+        updater_prefix = f"{NAME}-codex/plugins/{NAME}/"
+        required = {
+            f"{updater_prefix}scripts/update_plugin.py",
+            f"{updater_prefix}scripts/install_updater.py",
+            f"{updater_prefix}requirements-updater.txt",
+            f"{updater_prefix}launchd/com.rrpauls.sports-betting-expert-updater.plist.in",
+        }
+        if not required.issubset(archive.namelist()):
+            raise ValueError("Codex archive is missing its updater or LaunchAgent installer")
     with ZipFile(gemini) as archive:
         if len(archive.namelist()) > 10:
             raise ValueError("Gemini bundle exceeds the documented ten-file upload budget")

@@ -6,27 +6,25 @@
 	<string>com.rrpauls.sports-betting-expert-updater</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/usr/local/bin/pyenv</string>
-		<string>exec</string>
-		<string>python</string>
-		<string>/Users/owner/Projects/sports-betting-expert/scripts/update_plugin.py</string>
+		<string>@PYTHON_EXECUTABLE@</string>
+		<string>@UPDATER_SCRIPT@</string>
 		<string>--codex</string>
-		<string>/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex</string>
+		<string>@CODEX_EXECUTABLE@</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>HOME</key>
-		<string>/Users/owner</string>
+		<string>@HOME_PATH@</string>
 		<key>PATH</key>
-		<string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+		<string>@PATH_VALUE@</string>
 	</dict>
 	<key>StartInterval</key>
 	<integer>86400</integer>
 	<key>StandardOutPath</key>
-	<string>/Users/owner/Library/Logs/sports-betting-expert-updater.log</string>
+	<string>@LOG_OUT@</string>
 	<key>StandardErrorPath</key>
-	<string>/Users/owner/Library/Logs/sports-betting-expert-updater.err</string>
+	<string>@LOG_ERROR@</string>
 </dict>
 </plist>

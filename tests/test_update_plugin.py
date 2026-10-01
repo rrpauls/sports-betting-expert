@@ -94,7 +94,7 @@ class UpdatePluginRefreshTests(unittest.TestCase):
                 ),
             ):
                 update_plugin.refresh_local_archive(
-                    "codex", installed, candidate, "1.0.3", REPOSITORY
+                    "codex", installed, candidate, "1.0.3", REPOSITORY, "1.0.2"
                 )
 
             self.assertTrue((target / "agents" / "new.md").is_file())
@@ -123,11 +123,61 @@ class UpdatePluginRefreshTests(unittest.TestCase):
             with patch.object(update_plugin, "run") as run_mock:
                 with self.assertRaisesRegex(RuntimeError, "identity/repository"):
                     update_plugin.refresh_local_archive(
-                        "codex", installed, candidate, "1.0.3", REPOSITORY
+                        "codex", installed, candidate, "1.0.3", REPOSITORY, "1.0.2"
                     )
 
             self.assertEqual(marker.read_text(encoding="utf-8"), "leave intact")
             run_mock.assert_not_called()
+
+    def test_local_archive_rolls_back_source_and_cached_version_after_post_install_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "installed"
+            candidate = root / "candidate"
+            write_plugin(target, version="1.0.2")
+            (target / "old-component.txt").write_text("old", encoding="utf-8")
+            write_plugin(candidate, version="1.0.3")
+            installed = {
+                "marketplaceName": "sports-betting-expert",
+                "source": {"source": "local", "path": str(target)},
+            }
+            cached_states = [
+                [{"marketplaceName": "sports-betting-expert", "version": "1.0.2"}],
+                [{"marketplaceName": "sports-betting-expert", "version": "1.0.2"}],
+            ]
+
+            with (
+                patch.object(update_plugin, "run") as run_mock,
+                patch.object(update_plugin, "load_installed", side_effect=cached_states),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "did not refresh.*1.0.3"):
+                    update_plugin.refresh_local_archive(
+                        "codex", installed, candidate, "1.0.3", REPOSITORY, "1.0.2"
+                    )
+
+            self.assertEqual((target / "old-component.txt").read_text(encoding="utf-8"), "old")
+            self.assertFalse((target / "skills" / "sports-betting-expert" / "new-only.txt").exists())
+            self.assertEqual(run_mock.call_count, 2)
+            self.assertTrue(all(call.args[0][1:3] == ["plugin", "add"] for call in run_mock.call_args_list))
+
+    def test_candidate_validation_rejects_malformed_yaml_before_running_suite(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_plugin(root)
+            skill = root / "skills" / "sports-betting-expert" / "SKILL.md"
+            skill.write_text("---\nname: [\ndescription: broken\n---\n", encoding="utf-8")
+            with patch.object(update_plugin, "run") as run_mock:
+                with self.assertRaisesRegex(RuntimeError, "invalid YAML"):
+                    update_plugin.validate_candidate(root)
+            run_mock.assert_not_called()
+
+    def test_candidate_validation_accepts_required_yaml_fields(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_plugin(root)
+            with patch.object(update_plugin, "run") as run_mock:
+                update_plugin.validate_candidate(root)
+            self.assertEqual(run_mock.call_count, 2)
 
     def test_git_marketplace_validates_the_refreshed_pinned_snapshot_before_add(self):
         with tempfile.TemporaryDirectory() as temporary:

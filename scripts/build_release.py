@@ -66,6 +66,10 @@ def build_codex_zip(output: Path) -> None:
         REPO_ROOT / "README.md",
         REPO_ROOT / "INSTALL.md",
         REPO_ROOT / "MIGRATION.md",
+        REPO_ROOT / "requirements-updater.txt",
+        REPO_ROOT / "scripts" / "install_updater.py",
+        REPO_ROOT / "scripts" / "update_plugin.py",
+        REPO_ROOT / "launchd" / "com.rrpauls.sports-betting-expert-updater.plist.in",
     ]
     with ZipFile(output, "w") as archive:
         add_bytes(archive, f"{root}/.agents/plugins/marketplace.json", local_marketplace())

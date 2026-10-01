@@ -148,11 +148,23 @@ def validate_candidate(root: Path) -> None:
     frontmatter = re.match(r"\A---\n(.*?)\n---\n", skill_text, re.DOTALL)
     if not frontmatter:
         raise RuntimeError("candidate nested skill is empty or missing YAML frontmatter")
-    fields = frontmatter.group(1)
-    if not re.search(r"(?m)^name:\s*\S", fields) or not re.search(
-        r"(?m)^description:\s*\S", fields
+    try:
+        import yaml
+    except ImportError as exc:
+        raise RuntimeError(
+            "candidate YAML validation requires PyYAML; install requirements-updater.txt"
+        ) from exc
+    try:
+        metadata = yaml.safe_load(frontmatter.group(1))
+    except yaml.YAMLError as exc:
+        raise RuntimeError("candidate skill frontmatter is invalid YAML") from exc
+    if (
+        not isinstance(metadata, dict)
+        or metadata.get("name") != PLUGIN_NAME
+        or not isinstance(metadata.get("description"), str)
+        or not metadata["description"].strip()
     ):
-        raise RuntimeError("candidate skill frontmatter must include name and description")
+        raise RuntimeError("candidate skill frontmatter must define its name and description")
     run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"], cwd=root)
     run([sys.executable, "scripts/validate_artifacts.py"], cwd=root)
 
@@ -163,6 +175,7 @@ def refresh_local_archive(
     candidate: Path,
     candidate_version: str,
     repository: str,
+    installed_version: str,
 ) -> None:
     marketplace_name = installed.get("marketplaceName")
     if not isinstance(marketplace_name, str) or not marketplace_name:
@@ -209,10 +222,25 @@ def refresh_local_archive(
                 raise RuntimeError(
                     f"Codex did not refresh the local archive cache to {candidate_version}"
                 )
-        except Exception:
+        except Exception as update_error:
             if target.exists():
                 shutil.rmtree(target)
             os.replace(backup, target)
+            try:
+                run([codex, "plugin", "add", f"{PLUGIN_NAME}@{marketplace_name}", "--json"])
+                restored = [
+                    item
+                    for item in load_installed(codex)
+                    if item.get("marketplaceName") == marketplace_name
+                ]
+                if not any(item.get("version") == installed_version for item in restored):
+                    raise RuntimeError(
+                        f"Codex did not restore the cached plugin to {installed_version}"
+                    )
+            except Exception as rollback_error:
+                raise RuntimeError(
+                    f"source restored, but cached plugin rollback failed: {rollback_error}"
+                ) from update_error
             raise
 
 
@@ -294,7 +322,17 @@ def refresh(
         raise RuntimeError("Codex did not report the installed plugin marketplace")
     source = installed.get("source") or {}
     if source.get("source") == "local":
-        refresh_local_archive(codex, installed, candidate, candidate_version, repository)
+        installed_version = installed.get("version")
+        if not isinstance(installed_version, str):
+            raise RuntimeError("Codex did not report the installed plugin version")
+        refresh_local_archive(
+            codex,
+            installed,
+            candidate,
+            candidate_version,
+            repository,
+            installed_version,
+        )
         return
     marketplace_source = installed.get("marketplaceSource") or {}
     if marketplace_source.get("sourceType") == "git":
