@@ -1,0 +1,46 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    uses: ./.github/workflows/ci.yml
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m venv .venv
+      - run: .venv/bin/python -m pip install -r requirements-updater.txt
+      - name: Verify tag, manifests, artifact reproducibility and clean source
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: .venv/bin/python scripts/check_release.py --tag "$RELEASE_TAG"
+      - name: Prevent same-version mutation relative to previous release
+        run: |
+          previous_tag=$(git describe --tags --match 'v[0-9]*' --abbrev=0 HEAD^)
+          .venv/bin/python scripts/check_version_bump.py --base-ref "$previous_tag"
+      - name: Validate supplied release notes
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          notes="docs/RELEASE-NOTES-$RELEASE_TAG.md"
+          test -s "$notes"
+          echo "SBE_NOTES=$notes" >> "$GITHUB_ENV"
+      - name: Upload validated release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create "$RELEASE_TAG" dist/* --verify-tag --title "Sports Betting Expert $RELEASE_TAG" --notes-file "$SBE_NOTES"

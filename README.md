@@ -1,57 +1,36 @@
 # Sports Betting Expert
 
-Canonical multi-host skill for evidence-led sports betting analysis. The maintained behavior lives in [`skills/sports-betting-expert`](skills/sports-betting-expert); release packages and host adapters are generated from it. Tennis selections remain live-only, and the optional `priority-live-tennis` profile remains off by default.
+One canonical skill for evidence-led sports betting analysis: [`skills/sports-betting-expert/`](skills/sports-betting-expert/). All host packages derive from those files. The workflow requires current evidence, invents neither prices nor statistics, never places bets, and keeps new tennis selections **live-only**. The optional sport-priority profile stays off unless requested.
 
-## Distribution and update support
+## Installation and updates
 
-Automatic invocation and automatic content updates are separate host features:
+Use the [audited support matrix](docs/SUPPORT-MATRIX.md) to choose your installation source, then [INSTALL.md](INSTALL.md) for exact steps. Native invocation, installation, content updates and manual refresh are separate capabilities.
 
-| Host / installation type | Automatic invocation | Automatic content update | Update source | Update mechanism | Limitations / required permissions |
-|---|---|---|---|---|---|
-| Codex or ChatGPT Desktop, Git marketplace | When relevant, after the plugin is enabled | Automatic after updater setup on macOS | GitHub `main`; each release must have a newer SemVer | Dedicated updater venv plus a daily LaunchAgent validates a clean clone, builds and validates artifacts, then installs from the exact marketplace commit | Run `python3 scripts/install_updater.py`; signed-in user session and Codex CLI required. Direct Git installs without a verifiable marketplace snapshot remain unchanged. Linux and Windows schedulers are not implemented. Restart desktop after an update. |
-| Codex or ChatGPT Desktop, portable Codex ZIP | When relevant, after the plugin is enabled | Automatic after updater setup on macOS | GitHub `main`; each release must have a newer SemVer | Updater replaces the local plugin source atomically and refreshes Codex's cache | Same setup and platform requirements as above. |
-| ChatGPT Web, manual Skill ZIP | When relevant, after upload and enablement | No | New release ZIP built from GitHub `main` | Replace/re-upload the skill ZIP | Upload permissions and feature availability depend on the account/workspace. A ZIP upload does not track GitHub. |
-| ChatGPT Web, GitHub-managed workspace marketplace | When relevant, after workspace installation/enablement | Yes, daily sync by OpenAI | GitHub marketplace repository, normally its default branch (`main`) | Workspace admin imports `.agents/plugins/marketplace.json`; OpenAI synchronizes daily, with an admin “Sync now” option | Eligible managed workspace and admin GitHub access required. Workspace policy controls installation; sync does not grant access to included apps. Do not install the local LaunchAgent for this hosted path. |
-| Claude Web, uploaded Skill ZIP | When relevant, after upload and enablement | No | New release ZIP built from GitHub `main` | Replace/re-upload the skill ZIP | Uploaded skills are copies. Anthropic's GitHub project integration syncs repository context, not this skill package; no GitHub-synced organization marketplace is claimed here. |
-| Gemini Web, native Skill import | When relevant, after import and enablement | No | Current canonical `SKILL.md` or a release ZIP | Re-import/replace the skill after a release | GitHub is not a live skill source. Availability and skill controls depend on account rollout. |
-| Grok Web, Project Markdown adapter | Within that Project's conversations | No | Generated adapter from GitHub `main` | Replace the Project Markdown file after a release | Project-scoped static content, not an account-wide skill or source-sync integration. |
+- OpenAI: portable plugin ZIP, standalone Skill ZIP, GitHub workspace marketplace, Codex Git/local marketplace, hosted/API and self-hosted capability directory.
+- Claude: native plugin/marketplace, standalone Skill, personal/organization upload, private organization mirror, native Code updater and one-way account sync.
+- Gemini: native Skill for Apps and Enterprise; Gemini CLI uses the same canonical folder. Gem packaging is an explicitly named legacy fallback.
+- Grok: native Skills; Build reuses the Claude plugin and marketplace through [official compatibility](https://docs.x.ai/build/features/skills-plugins-marketplaces). Project Markdown remains a fallback.
 
-GitHub `main` is the canonical development and update source. Every distributed content or updater change must bump the semantic version in root [`plugin.json`](plugin.json); same-version edits are intentionally not installed by the updater. CI rejects distributed changes without a newer version and version regressions.
+Hosted GitHub marketplace synchronization follows the vendor's rules. Claude Code third-party auto-update must be enabled. Static uploads do not track GitHub. Local Codex installations can opt into this repository's daily validated updater on macOS, Linux with user systemd, or Windows Task Scheduler. No local scheduler is installed by uploading a hosted plugin.
 
-The ChatGPT workspace marketplace manifest is at [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json). OpenAI documents GitHub marketplace import and daily synchronization for eligible workspace admins in [Importing and syncing plugin marketplaces from GitHub](https://help.openai.com/en/articles/20001504-importing-and-syncing-plugin-marketplaces-from-github). OpenAI currently accepts Codex marketplace manifests under `.agents/plugins/marketplace.json`; we do not claim an Anthropic GitHub-synced marketplace for Claude Web.
+## Build and review
 
-## Local Codex / ChatGPT Desktop updater
+Version **1.1.0** is prepared for release; nothing here asserts external publication or directory acceptance. Root `plugin.json` owns the version. Claude manifests are generated metadata, not independent source. Change distributed content only with a newer SemVer.
 
-Installing the plugin does not install its scheduler. From a repository checkout, run this once on macOS:
+With the project virtual environment:
 
 ```bash
-python3 scripts/install_updater.py
-```
-
-This creates a dedicated updater virtual environment, installs its dependency, writes and loads the user LaunchAgent, and confirms launchd registration. It is safe to repeat. Check it with `python3 scripts/install_updater.py status` and remove it with `python3 scripts/install_updater.py uninstall`. See [INSTALL.md](INSTALL.md) for ZIP installation and details.
-
-## Verified release status
-
-Release `v1.0.2` was the latest published release before this repair. Its historical verification was: canonical tests 10/10, artifact validation and checksums passed, Codex and portable packages validated, ChatGPT Web and Claude Web smoke prompts passed, and Gemini/Grok status was user-verified. That evidence applies to `v1.0.2`, not this unreleased `v1.0.3` repair.
-
-Gemini Apps now support native reusable skills based on `SKILL.md`; the older `v1.0.2` Gem bundle remains a legacy artifact. See [INSTALL-GEMINI.md](INSTALL-GEMINI.md) and Google's [Create & manage skills](https://support.google.com/gemini/answer/17094296?hl=en). Availability can vary by account and rollout.
-
-## Build and validate
-
-```bash
-python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-updater.txt
+.venv/bin/python scripts/sync_manifests.py --check
 .venv/bin/python -m unittest discover -s tests -v
 .venv/bin/python scripts/build_release.py
 .venv/bin/python scripts/validate_artifacts.py
 ```
 
-The builder clears stale generated files before producing the current manifest version under `dist/`. CI runs the same tests → build → artifact validation sequence used for updater candidates.
+On Windows use `.venv\Scripts\python.exe`. If no environment exists, create one with the installed Python 3.11+ interpreter (`python3 -m venv .venv` on Unix, `py -3 -m venv .venv` on Windows) before installing dependencies or running project code.
 
-## Boundaries
-
-The calculator performs conditional arithmetic; it does not retrieve odds or predict results. The skill never places bets or operates an account. Current claims and prices require current sources or a clearly labeled user-provided snapshot.
+The builder emits seven ZIPs and one legacy Markdown file plus `SHA256SUMS`. Package layouts and contents are checked against canonical bytes; the public Agent Plugins schema is vendored under `schemas/`. [Release procedure](docs/RELEASING.md) describes clean builds and CI gates. [Distribution verification](docs/VERIFICATION.md) records the scope of local checks and remaining vendor/OS checks.
 
 ## License
 
-MIT
+MIT. This is conditional research and arithmetic, not an odds feed or guaranteed prediction service.

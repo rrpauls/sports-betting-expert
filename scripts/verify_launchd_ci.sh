@@ -13,7 +13,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-LABEL="$label" AGENT="$agent" python3 - <<'PY'
+LABEL="$label" AGENT="$agent" "${SBE_PYTHON:-.venv/bin/python}" - <<'PY'
 import os
 import plistlib
 

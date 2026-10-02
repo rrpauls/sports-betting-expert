@@ -1,0 +1,16 @@
+{
+  "name": "sports-betting-expert",
+  "description": "Canonical Sports Betting Expert skill and plugin distribution.",
+  "owner": {
+    "name": "rrpauls",
+    "url": "https://github.com/rrpauls"
+  },
+  "plugins": [
+    {
+      "name": "sports-betting-expert",
+      "source": "./",
+      "version": "1.1.0",
+      "description": "Evidence-led sports betting analysis for matches, odds, coupons, accumulators, and live positions."
+    }
+  ]
+}

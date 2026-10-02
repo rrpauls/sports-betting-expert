@@ -73,7 +73,7 @@ class UpdatePluginVersionTests(unittest.TestCase):
 
 
 class UpdaterDecisionFlowTests(unittest.TestCase):
-    def run_candidate(self, version: str, *, validate_error: Exception | None = None):
+    def run_candidate(self, version: str, *, validate_error: Exception | None = None, copies: int = 1):
         temporary = tempfile.TemporaryDirectory()
         root = Path(temporary.name)
         candidate = root / "candidate-source"
@@ -83,7 +83,8 @@ class UpdaterDecisionFlowTests(unittest.TestCase):
             "version": "1.0.2", "source": {"source": "git", "url": REPOSITORY},
             "marketplaceSource": {"sourceType": "git", "source": REPOSITORY},
         }]
-        new = [{**old[0], "version": version}]
+        old = [{**old[0], "marketplaceName": f"market-{index}"} for index in range(copies)]
+        new = [{**item, "version": version} for item in old]
         refresh_calls = []
 
         def fake_run(command, *, cwd=None, capture=False):
@@ -105,6 +106,18 @@ class UpdaterDecisionFlowTests(unittest.TestCase):
             result = update_plugin.main()
         temporary.cleanup()
         return result, refresh_calls
+
+    def test_all_installed_copies_are_updated(self):
+        result, calls = self.run_candidate("1.0.3", copies=3)
+        self.assertEqual(result, 0)
+        self.assertEqual({call[1]["marketplaceName"] for call in calls}, {"market-0", "market-1", "market-2"})
+
+    def test_no_installed_plugin_is_a_noop_without_cloning(self):
+        with (patch.object(update_plugin, "load_installed", return_value=[]),
+              patch.object(update_plugin, "run") as run,
+              patch.object(sys, "argv", ["update_plugin.py", "--codex", "codex"])):
+            self.assertEqual(update_plugin.main(), 0)
+            run.assert_not_called()
 
     def test_old_install_updates_only_after_candidate_validation(self):
         result, calls = self.run_candidate("1.0.3")

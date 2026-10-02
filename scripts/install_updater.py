@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install, inspect, or remove the macOS Sports Betting Expert updater."""
+"""Install, inspect, or remove the per-user Sports Betting Expert updater."""
 
 from __future__ import annotations
 
@@ -13,6 +13,10 @@ import tempfile
 import venv
 from pathlib import Path
 from typing import Any, Callable
+try:
+    from . import schedulers
+except ImportError:
+    import schedulers
 
 
 LABEL = "com.rrpauls.sports-betting-expert-updater"
@@ -111,13 +115,15 @@ def agent_is_registered(*, uid: int, runner: Runner = subprocess.run) -> bool:
 def _ensure_runtime(source_root: Path, state_root: Path, python: Path) -> Path:
     scripts = state_root / "scripts"
     scripts.mkdir(parents=True, exist_ok=True)
-    for name in ("update_plugin.py", "release_version.py"):
+    for name in ("update_plugin.py", "release_version.py", "schedulers.py"):
         shutil.copy2(source_root / "scripts" / name, scripts / name)
     shutil.copy2(source_root / "requirements-updater.txt", state_root / "requirements-updater.txt")
+    # release_version reads this metadata even in the standalone updater runtime.
+    shutil.copy2(source_root / "plugin.json", state_root / "plugin.json")
     environment = state_root / "venv"
-    if not (environment / "bin" / "python").is_file():
+    runtime_python = environment / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    if not runtime_python.is_file():
         venv.EnvBuilder(with_pip=True, clear=False).create(environment)
-    runtime_python = environment / "bin" / "python"
     subprocess.run(
         [str(runtime_python), "-m", "pip", "install", "--disable-pip-version-check", "-r", str(state_root / "requirements-updater.txt")],
         check=True,
@@ -140,42 +146,59 @@ def install(
         path_value=os.environ.get("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"),
         codex_home=Path(os.environ.get("CODEX_HOME", str(home / ".codex"))), template=template,
     )
-    launchctl("bootout", agent, uid=os.getuid(), runner=runner)
-    launchctl("bootstrap", agent, uid=os.getuid(), runner=runner)
-    if not agent_is_registered(uid=os.getuid(), runner=runner):
+    launchctl("bootout", agent, uid=getattr(os, "getuid", lambda: 0)(), runner=runner)
+    launchctl("bootstrap", agent, uid=getattr(os, "getuid", lambda: 0)(), runner=runner)
+    if not agent_is_registered(uid=getattr(os, "getuid", lambda: 0)(), runner=runner):
         raise RuntimeError("LaunchAgent was written but launchd does not report it as registered")
     return agent
 
 
 def uninstall(*, home: Path, runner: Runner = subprocess.run) -> None:
     agent = home / "Library" / "LaunchAgents" / f"{LABEL}.plist"
-    launchctl("bootout", agent, uid=os.getuid(), runner=runner)
+    launchctl("bootout", agent, uid=getattr(os, "getuid", lambda: 0)(), runner=runner)
     agent.unlink(missing_ok=True)
     shutil.rmtree(home / "Library" / "Application Support" / STATE_NAME, ignore_errors=True)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", nargs="?", choices=("install", "status", "uninstall"), default="install")
+    parser.add_argument("action", nargs="?", choices=("install", "status", "update-now", "uninstall"), default="install")
     parser.add_argument("--codex", help="Codex CLI executable; otherwise discover it")
     args = parser.parse_args()
     home = Path.home()
     agent = home / "Library" / "LaunchAgents" / f"{LABEL}.plist"
-    if sys.platform != "darwin":
-        print("The automatic scheduler is currently supported on macOS only.", file=sys.stderr)
-        return 1
     try:
+        state = schedulers.state_root(home, sys.platform)
         if args.action == "status":
-            registered = agent_is_registered(uid=os.getuid())
-            print(f"Updater LaunchAgent: {'registered' if registered else 'not registered'} ({agent})")
+            registered = (agent_is_registered(uid=getattr(os, "getuid", lambda: 0)()) if sys.platform == "darwin"
+                          else schedulers.scheduler_status(sys.platform))
+            location = (str(agent) if sys.platform == "darwin" else
+                        str(home / ".config/systemd/user" / f"{schedulers.UNIT}.timer")
+                        if sys.platform.startswith("linux") else schedulers.LABEL)
+            print(f"Updater scheduler: {'registered' if registered else 'not registered'} ({location})")
             return 0 if registered else 1
         if args.action == "uninstall":
-            uninstall(home=home)
-            print("Updater LaunchAgent and its dedicated runtime were removed.")
+            if sys.platform == "darwin":
+                uninstall(home=home)
+            else:
+                schedulers.uninstall_scheduler(sys.platform, home)
+                shutil.rmtree(state, ignore_errors=True)
+            print("Updater scheduler and its dedicated runtime were removed.")
             return 0
         codex = find_codex(args.codex)
-        agent = install(home=home, source_root=Path(__file__).resolve().parents[1], codex=codex)
-    except (OSError, RuntimeError, subprocess.CalledProcessError, plistlib.InvalidFileException) as exc:
+        source_root = Path(__file__).resolve().parents[1]
+        if args.action == "update-now":
+            command = [sys.executable, str(source_root / "scripts/update_plugin.py"), "--codex", str(codex)]
+            return subprocess.run(command, check=False).returncode
+        if sys.platform == "darwin":
+            agent = install(home=home, source_root=source_root, codex=codex)
+        else:
+            runtime = _ensure_runtime(source_root, state, Path(sys.executable))
+            codex_home = Path(os.environ.get("CODEX_HOME", str(home / ".codex"))).expanduser().resolve()
+            command = [str(runtime), str(state / "scripts/update_plugin.py"), "--codex", str(codex),
+                       "--codex-home", str(codex_home)]
+            agent = schedulers.install_scheduler(sys.platform, home, command, codex_home)
+    except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError, plistlib.InvalidFileException) as exc:
         print(f"Updater setup failed: {exc}", file=sys.stderr)
         return 1
     print(f"Updater installed and registered: {agent}")

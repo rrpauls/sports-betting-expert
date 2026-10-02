@@ -15,6 +15,7 @@ except ImportError:
 
 
 RELEASE_PATHS = (
+    ".claude-plugin/", ".grok-plugin/", "schemas/", "docs/", "scripts/", "INSTALL-", ".github/workflows/", ".gitattributes",
     ".agents/plugins/marketplace.json", ".codex-plugin/", "plugin.json", "skills/",
     "scripts/build_release.py", "scripts/validate_artifacts.py", "scripts/release_version.py",
     "scripts/update_plugin.py", "scripts/install_updater.py", "scripts/bet_math.py",
