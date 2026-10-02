@@ -17,7 +17,7 @@ class ReleaseTests(unittest.TestCase):
         skill = (ROOT / "skills/sports-betting-expert/SKILL.md").read_text()
         grok = (ROOT / f"dist/sports-betting-expert-grok-web-v{VERSION}.md").read_text()
         self.assertIn(skill, grok)
-        with ZipFile(ROOT / f"dist/sports-betting-expert-gemini-v{VERSION}.zip") as archive:
+        with ZipFile(ROOT / f"dist/sports-betting-expert-gemini-legacy-gem-v{VERSION}.zip") as archive:
             self.assertEqual(archive.read("gemini-knowledge/canonical-skill.md").decode(), skill)
 
     def test_generated_release_versions_match_both_plugin_manifests(self):

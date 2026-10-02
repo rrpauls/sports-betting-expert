@@ -22,6 +22,7 @@ FIXED_TIME = (2026, 1, 1, 0, 0, 0)
 
 def archive_info(name: str) -> ZipInfo:
     info = ZipInfo(name, date_time=FIXED_TIME)
+    info.create_system = 3
     info.compress_type = ZIP_DEFLATED
     info.external_attr = 0o100644 << 16
     return info
@@ -29,20 +30,6 @@ def archive_info(name: str) -> ZipInfo:
 
 def add_bytes(archive: ZipFile, name: str, data: bytes) -> None:
     archive.writestr(archive_info(name), data)
-
-
-def files_under(root: Path) -> list[Path]:
-    return sorted(
-        path for path in root.rglob("*")
-        if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
-    )
-
-
-def build_skill_zip(output: Path) -> None:
-    with ZipFile(output, "w") as archive:
-        for source in files_under(SKILL_ROOT):
-            relative = source.relative_to(SKILL_ROOT).as_posix()
-            add_bytes(archive, f"{PLUGIN_NAME}/{relative}", source.read_bytes())
 
 
 def local_marketplace() -> bytes:
@@ -57,33 +44,6 @@ def local_marketplace() -> bytes:
         }],
     }
     return (json.dumps(data, indent=2, ensure_ascii=False) + "\n").encode()
-
-
-def build_codex_zip(output: Path) -> None:
-    root = f"{PLUGIN_NAME}-codex"
-    plugin_prefix = f"{root}/plugins/{PLUGIN_NAME}"
-    fixed_files = [
-        REPO_ROOT / ".codex-plugin" / "plugin.json",
-        REPO_ROOT / "plugin.json",
-        REPO_ROOT / "LICENSE",
-        REPO_ROOT / "README.md",
-        REPO_ROOT / "INSTALL.md",
-        REPO_ROOT / "MIGRATION.md",
-        REPO_ROOT / "requirements-updater.txt",
-        REPO_ROOT / "scripts" / "install_updater.py",
-        REPO_ROOT / "scripts" / "update_plugin.py",
-        REPO_ROOT / "scripts" / "release_version.py",
-        REPO_ROOT / "launchd" / "com.rrpauls.sports-betting-expert-updater.plist.in",
-    ]
-    with ZipFile(output, "w") as archive:
-        add_bytes(archive, f"{root}/.agents/plugins/marketplace.json", local_marketplace())
-        add_bytes(archive, f"{root}/INSTALL.md", (REPO_ROOT / "INSTALL.md").read_bytes())
-        for source in fixed_files:
-            relative = source.relative_to(REPO_ROOT).as_posix()
-            add_bytes(archive, f"{plugin_prefix}/{relative}", source.read_bytes())
-        for source in files_under(SKILL_ROOT):
-            relative = source.relative_to(REPO_ROOT).as_posix()
-            add_bytes(archive, f"{plugin_prefix}/{relative}", source.read_bytes())
 
 
 def gemini_instructions() -> str:
@@ -116,32 +76,30 @@ def gemini_knowledge() -> dict[str, bytes]:
     }
 
 
-def build_gemini_zip(output: Path) -> None:
-    with ZipFile(output, "w") as archive:
-        add_bytes(archive, "gemini-gem-instructions.md", gemini_instructions().encode())
-        add_bytes(archive, "INSTALL-GEMINI.md", (REPO_ROOT / "INSTALL-GEMINI.md").read_bytes())
-        for name, data in sorted(gemini_knowledge().items()):
-            add_bytes(archive, f"gemini-knowledge/{name}", data)
-
-
 def build_grok_adapter(output: Path) -> None:
     parts = [
-        "# Sports Betting Expert — Grok Web Project Adapter\n",
+        "# Sports Betting Expert — Grok Web Project Adapter (legacy fallback)\n",
         "Upload this generated file to a Grok Project. Apply the canonical workflow below to requests inside that Project. It is not an account-wide skill. Default to Russian unless the user asks otherwise. Tennis betting selections are always live-only. The optional `priority-live-tennis` sport-order profile is inactive unless explicitly enabled.\n",
-        (SKILL_ROOT / "SKILL.md").read_text(),
-        (SKILL_ROOT / "references/sources-and-methods.md").read_text(),
-        (SKILL_ROOT / "references/markets-and-coupons.md").read_text(),
-        (SKILL_ROOT / "references/profiles/priority-live-tennis.md").read_text(),
+        (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8"),
+        (SKILL_ROOT / "references/sources-and-methods.md").read_text(encoding="utf-8"),
+        (SKILL_ROOT / "references/markets-and-coupons.md").read_text(encoding="utf-8"),
+        (SKILL_ROOT / "references/profiles/priority-live-tennis.md").read_text(encoding="utf-8"),
     ]
-    output.write_text("\n\n".join(parts).rstrip() + "\n")
+    output.write_text("\n\n".join(parts).rstrip() + "\n", encoding="utf-8", newline="\n")
 
 
 def write_checksums(outputs: list[Path]) -> None:
     lines = [f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}" for path in sorted(outputs)]
-    (DIST / "SHA256SUMS").write_text("\n".join(lines) + "\n")
+    (DIST / "SHA256SUMS").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
 
 def main() -> None:
+    import sys
+    if __package__ in (None, ""):
+        sys.path.insert(0, str(REPO_ROOT))
+    from scripts.distribution import package_contents, sync_manifests
+    sync_manifests(check=True)
+    contents_by_package = package_contents(VERSION)
     DIST.mkdir(exist_ok=True)
     for old in DIST.glob(f"{PLUGIN_NAME}-*"):
         if old.is_file() or old.is_symlink():
@@ -151,16 +109,16 @@ def main() -> None:
 
             shutil.rmtree(old)
     (DIST / "SHA256SUMS").unlink(missing_ok=True)
-    outputs = [
-        DIST / f"{PLUGIN_NAME}-skill-v{VERSION}.zip",
-        DIST / f"{PLUGIN_NAME}-codex-v{VERSION}.zip",
-        DIST / f"{PLUGIN_NAME}-gemini-v{VERSION}.zip",
-        DIST / f"{PLUGIN_NAME}-grok-web-v{VERSION}.md",
-    ]
-    build_skill_zip(outputs[0])
-    build_codex_zip(outputs[1])
-    build_gemini_zip(outputs[2])
-    build_grok_adapter(outputs[3])
+    outputs = []
+    for name, contents in contents_by_package.items():
+        output = DIST / name
+        with ZipFile(output, "w") as archive:
+            for member, data in sorted(contents.items()):
+                add_bytes(archive, member, data)
+        outputs.append(output)
+    grok = DIST / f"{PLUGIN_NAME}-grok-web-v{VERSION}.md"
+    build_grok_adapter(grok)
+    outputs.append(grok)
     write_checksums(outputs)
 
 

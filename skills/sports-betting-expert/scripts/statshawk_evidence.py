@@ -84,7 +84,10 @@ def write_private(path: Path, value: dict[str, Any]) -> None:
     flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(path, flags, 0o600)
     try:
-        os.fchmod(descriptor, 0o600)
+        if hasattr(os, "fchmod"):
+            os.fchmod(descriptor, 0o600)
+        else:
+            path.chmod(0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             descriptor = -1
             json.dump(value, handle, sort_keys=True, separators=(",", ":"))

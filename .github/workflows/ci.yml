@@ -1,39 +1,59 @@
 name: validate
-
 on:
   push:
   pull_request:
-
+  workflow_call:
+env:
+  PYTHONUTF8: '1'
+permissions:
+  contents: read
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-      - run: python3 -m pip install -r requirements-updater.txt
-      - run: python3 -m unittest discover -s tests -v
-      - run: python3 scripts/build_release.py
-      - run: python3 scripts/validate_artifacts.py
-      - name: Require a release version bump for distributed changes
-        if: github.event_name == 'pull_request' || github.event.before != '0000000000000000000000000000000000000000'
+          python-version: '3.11'
+      - name: Create project virtual environment
+        run: |
+          python -m venv .venv
+          if [ "$RUNNER_OS" = Windows ]; then
+            echo 'SBE_PYTHON=.venv/Scripts/python.exe' >> "$GITHUB_ENV"
+          else
+            echo 'SBE_PYTHON=.venv/bin/python' >> "$GITHUB_ENV"
+          fi
+      - run: '"$SBE_PYTHON" -m pip install -r requirements-updater.txt'
+      - run: '"$SBE_PYTHON" scripts/sync_manifests.py --check'
+      - run: '"$SBE_PYTHON" -m unittest discover -s tests -v'
+      - run: '"$SBE_PYTHON" scripts/build_release.py'
+      - run: '"$SBE_PYTHON" scripts/validate_artifacts.py'
+      - name: Require release version bump for distributed changes
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') && github.event.before != '0000000000000000000000000000000000000000')
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: python3 scripts/check_version_bump.py --base-ref "$BASE_SHA"
-
-  macos-launchd:
-    runs-on: macos-14
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: python3 -m pip install -r requirements-updater.txt
-      - run: python3 -m unittest discover -s tests -v
-      - run: python3 scripts/build_release.py
-      - run: python3 scripts/validate_artifacts.py
-      - name: Verify a real per-user launchd bootstrap and bootout
+        run: '"$SBE_PYTHON" scripts/check_version_bump.py --base-ref "$BASE_SHA"'
+      - name: Verify native macOS scheduler
+        if: runner.os == 'macOS'
         run: bash scripts/verify_launchd_ci.sh
+      - name: Start CI Linux user manager
+        if: runner.os == 'Linux'
+        run: |
+          sudo loginctl enable-linger "$USER"
+          sudo systemctl start "user@$(id -u).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
+      - name: Verify native Linux or Windows scheduler
+        if: runner.os != 'macOS'
+        run: '"$SBE_PYTHON" scripts/verify_scheduler_ci.py'
+      - name: Ensure validation did not change tracked source
+        run: git diff --exit-code

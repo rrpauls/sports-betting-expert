@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "sports-betting-expert",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "Evidence-led sports betting analysis for matches, odds, coupons, accumulators, and live positions.",
   "author": {
     "name": "rrpauls",
@@ -10,16 +10,26 @@
   "homepage": "https://github.com/rrpauls/sports-betting-expert",
   "repository": "https://github.com/rrpauls/sports-betting-expert",
   "license": "MIT",
-  "keywords": ["sports-betting", "odds", "expected-value", "bankroll", "live-betting"],
+  "keywords": [
+    "sports-betting",
+    "odds",
+    "expected-value",
+    "bankroll",
+    "live-betting"
+  ],
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "Sports Betting Expert",
-        "shortDescription": "Разбор ставок, экспрессов, купонов и live-матчей",
+        "shortDescription": "Разбор ставок и live-матчей",
         "longDescription": "Research-led sports betting analysis with current-source checks, explicit uncertainty, settlement-aware arithmetic, and responsible bankroll guidance.",
         "developerName": "rrpauls",
         "category": "Productivity",
-        "capabilities": ["Current-data research", "Odds and EV analysis", "Coupon and live-position review"],
+        "capabilities": [
+          "Current-data research",
+          "Odds and EV analysis",
+          "Coupon and live-position review"
+        ],
         "websiteURL": "https://github.com/rrpauls/sports-betting-expert",
         "composerIcon": "./skills/sports-betting-expert/assets/icon.svg",
         "logo": "./skills/sports-betting-expert/assets/icon.svg",

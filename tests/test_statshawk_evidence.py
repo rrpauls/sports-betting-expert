@@ -33,18 +33,21 @@ class StatsHawkEvidenceTests(unittest.TestCase):
 
     def test_cli_writes_private_snapshot(self):
         with tempfile.TemporaryDirectory() as directory:
+            import sys
             source = Path(directory) / "source.json"
             output = Path(directory) / "snapshot.json"
             source.write_text(json.dumps({"results": [{"game_id": "g1", "status": "scheduled"}]}))
             output.write_text("old\n", encoding="utf-8")
-            output.chmod(0o644)
+            if sys.platform != 'win32':
+                output.chmod(0o644)
             code = statshawk_evidence.main([
                 "--tool", "search_games", "--league", "nba",
                 "--observed-at", "2026-09-26T09:00:00Z",
                 "--input", str(source), "--output", str(output),
             ])
             self.assertEqual(0, code)
-            self.assertEqual(0o600, stat.S_IMODE(output.stat().st_mode))
+            if sys.platform != 'win32':
+                self.assertEqual(0o600, stat.S_IMODE(output.stat().st_mode))
 
 
 if __name__ == "__main__":

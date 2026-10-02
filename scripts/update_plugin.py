@@ -271,8 +271,11 @@ def verify_listed_payload(
         reported_path = Path(source_path).resolve(strict=True)
         if not reported_path.is_dir() or payload_digest(reported_path) != expected_digest:
             raise RuntimeError("Codex installed source differs from the validated plugin bytes")
-    cache_version = "local" if source.get("source") == "local" else version
-    cached_path = codex_cache_payload(marketplace_name, cache_version)
+    # Current Codex uses versioned caches for local plugins too. Older clients
+    # used a "local" directory; verify either supported layout, never skip bytes.
+    cached_path = codex_cache_payload(marketplace_name, version)
+    if not cached_path.is_dir() and source.get("source") == "local":
+        cached_path = codex_cache_payload(marketplace_name, "local")
     if not cached_path.is_dir():
         if require_source_path:
             raise RuntimeError(f"Codex did not expose a verifiable installed cache at {cached_path}")
@@ -285,7 +288,10 @@ def refresh_updater_runtime(candidate: Path) -> None:
     """Atomically replace the LaunchAgent's copied updater after a successful plugin update."""
     runtime_script = Path(__file__).resolve()
     runtime_dir = runtime_script.parent
-    for name in ("update_plugin.py", "release_version.py"):
+    # Never overwrite the developer checkout when update-now is run from source.
+    if (runtime_dir.parent / "tests").is_dir():
+        return
+    for name in ("update_plugin.py", "release_version.py", "schedulers.py"):
         source = candidate / "scripts" / name
         target = runtime_dir / name
         with tempfile.NamedTemporaryFile(dir=runtime_dir, prefix=f".{name}-", delete=False) as stream:
@@ -296,6 +302,7 @@ def refresh_updater_runtime(candidate: Path) -> None:
         finally:
             temporary.unlink(missing_ok=True)
 
+    _atomic_write(runtime_dir.parent / "plugin.json", (candidate / "plugin.json").read_bytes())
 
 def refresh_local_archive(
     codex: str,
@@ -553,14 +560,17 @@ def refresh(
             "cannot safely refresh a direct Git plugin without a verifiable Git marketplace snapshot"
         )
     else:
-        run([codex, "plugin", "add", f"{PLUGIN_NAME}@{marketplace_name}", "--json"])
+        raise RuntimeError("unsupported source: cannot verify and roll back this installation")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--codex", default=os.environ.get("CODEX_CLI", shutil.which("codex")))
     parser.add_argument("--repository", default=REPOSITORY_URL)
+    parser.add_argument("--codex-home", type=Path, help="Dedicated Codex profile directory")
     args = parser.parse_args()
+    if args.codex_home:
+        os.environ["CODEX_HOME"] = str(args.codex_home.expanduser().resolve())
     if not args.codex:
         parser.error("Codex CLI was not found; pass --codex or set CODEX_CLI")
 
