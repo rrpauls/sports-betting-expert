@@ -59,7 +59,9 @@ class DistributionTests(unittest.TestCase):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / 'test.zip'
                 with ZipFile(path, 'w') as archive:
-                    archive.writestr(archive_info(name), b'test')
+                    info = archive_info(name)
+                    info.filename = name  # Force the filename to bypass ZipInfo os.sep replacement on Windows
+                    archive.writestr(info, b'test')
                 with self.assertRaises(ValueError):
                     validate_artifacts.validate_zip(path)
         for mode, data in ((0o120777, b'target'), (0o100644, b'-----BEGIN PRIVATE KEY-----')):
@@ -111,8 +113,10 @@ class DistributionTests(unittest.TestCase):
             manifest = json.loads(archive.read(f'{distribution.NAME}/.codex-plugin/plugin.json'))
             self.assertEqual(manifest['description'], inline['description'])
             self.assertEqual(manifest['version'], VERSION)
-        config = api_payloads.payload('self-hosted', '/workspace/capabilities')
-        self.assertEqual(config['environment']['capability_directories'], ['/workspace/capabilities'])
+        import os
+        expected_path = os.path.abspath('/workspace/capabilities')
+        config = api_payloads.payload('self-hosted', expected_path)
+        self.assertEqual(config['environment']['capability_directories'], [expected_path])
 
     def test_native_grok_catalog_resolves_same_plugin_without_second_copy(self):
         native = distribution.grok_marketplace()
