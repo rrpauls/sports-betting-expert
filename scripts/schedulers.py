@@ -102,7 +102,11 @@ def scheduler_status(platform: str, runner=subprocess.run) -> bool:
             print(f"DEBUG PARSE ERROR: {e}")
             print(f"DEBUG STDOUT: {repr(result.stdout)}")
             raise
-        return root.findtext(f'{{{NS}}}Settings/{{{NS}}}Enabled') == 'true'
+        enabled = root.findtext(f'{{{NS}}}Settings/{{{NS}}}Enabled')
+        if enabled != 'true':
+            print(f"DEBUG ENABLED IS: {repr(enabled)}")
+            print(f"DEBUG XML: {result.stdout}")
+        return enabled == 'true'
     raise RuntimeError(f'unsupported scheduler platform: {platform}')
 
 
