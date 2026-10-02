@@ -92,8 +92,16 @@ def scheduler_status(platform: str, runner=subprocess.run) -> bool:
     if platform == 'win32':
         result = call(runner, ['schtasks', '/Query', '/TN', LABEL, '/XML'], check=False)
         if result.returncode != 0:
+            print(f"DEBUG: schtasks query failed. Code: {result.returncode}")
+            print(f"DEBUG STDOUT: {repr(result.stdout)}")
+            print(f"DEBUG STDERR: {repr(result.stderr)}")
             return False
-        root = ET.fromstring(result.stdout)
+        try:
+            root = ET.fromstring(result.stdout)
+        except Exception as e:
+            print(f"DEBUG PARSE ERROR: {e}")
+            print(f"DEBUG STDOUT: {repr(result.stdout)}")
+            raise
         return root.findtext(f'{{{NS}}}Settings/{{{NS}}}Enabled') == 'true'
     raise RuntimeError(f'unsupported scheduler platform: {platform}')
 
