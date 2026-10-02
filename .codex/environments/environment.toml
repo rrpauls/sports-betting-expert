@@ -7,22 +7,25 @@ script = '''
 set -eu
 test -d "$CODEX_WORKTREE_PATH/skills/sports-betting-expert"
 test -d "$CODEX_WORKTREE_PATH/tests"
-command -v pyenv >/dev/null
 cd "$CODEX_WORKTREE_PATH"
-pyenv exec python --version
+if [ ! -x .venv/bin/python ]; then
+  python3 -m venv .venv
+fi
+.venv/bin/python -m pip install -r requirements-updater.txt
+.venv/bin/python --version
 '''
 
 [[actions]]
 name = "Test"
 icon = "test"
-command = "pyenv exec python -m unittest discover -s tests -v"
+command = ".venv/bin/python -m unittest discover -s tests -v"
 
 [[actions]]
 name = "Build Release"
 icon = "tool"
-command = "pyenv exec python scripts/build_release.py"
+command = ".venv/bin/python scripts/build_release.py"
 
 [[actions]]
 name = "Validate Artifacts"
 icon = "test"
-command = "pyenv exec python scripts/validate_artifacts.py"
+command = ".venv/bin/python scripts/validate_artifacts.py"
