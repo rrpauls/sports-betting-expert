@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a user-specific macOS LaunchAgent for the sports betting updater."""
+"""Install, inspect, or remove the macOS Sports Betting Expert updater."""
 
 from __future__ import annotations
 
@@ -7,10 +7,12 @@ import argparse
 import os
 import plistlib
 import shutil
+import subprocess
 import sys
 import tempfile
+import venv
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 LABEL = "com.rrpauls.sports-betting-expert-updater"
@@ -19,6 +21,8 @@ CHATGPT_CODEX = Path(
     "/Applications/ChatGPT.app/Contents/Resources/codex-cli/"
     "CodexCLI.app/Contents/MacOS/codex"
 )
+STATE_NAME = "Sports Betting Expert Updater"
+Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 
 def find_codex(explicit: str | None) -> Path:
@@ -52,6 +56,7 @@ def create_launch_agent(
     updater: Path,
     codex: Path,
     path_value: str,
+    codex_home: Path | None = None,
     template: Path = TEMPLATE,
 ) -> Path:
     with template.open("rb") as stream:
@@ -65,6 +70,7 @@ def create_launch_agent(
         "@UPDATER_SCRIPT@": str(updater.resolve()),
         "@CODEX_EXECUTABLE@": str(codex.resolve()),
         "@HOME_PATH@": str(home.resolve()),
+        "@CODEX_HOME@": str((codex_home or (home / ".codex")).expanduser().resolve()),
         "@PATH_VALUE@": path_value,
         "@LOG_OUT@": str(logs / "sports-betting-expert-updater.log"),
         "@LOG_ERROR@": str(logs / "sports-betting-expert-updater.err"),
@@ -81,25 +87,98 @@ def create_launch_agent(
     return target
 
 
+def launchctl(action: str, agent: Path, *, uid: int, runner: Runner = subprocess.run) -> subprocess.CompletedProcess[str]:
+    return runner(
+        ["launchctl", action, f"gui/{uid}", str(agent)],
+        check=action != "bootout",
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def agent_is_registered(*, uid: int, runner: Runner = subprocess.run) -> bool:
+    result = runner(
+        ["launchctl", "print", f"gui/{uid}/{LABEL}"],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return result.returncode == 0
+
+
+def _ensure_runtime(source_root: Path, state_root: Path, python: Path) -> Path:
+    scripts = state_root / "scripts"
+    scripts.mkdir(parents=True, exist_ok=True)
+    for name in ("update_plugin.py", "release_version.py"):
+        shutil.copy2(source_root / "scripts" / name, scripts / name)
+    shutil.copy2(source_root / "requirements-updater.txt", state_root / "requirements-updater.txt")
+    environment = state_root / "venv"
+    if not (environment / "bin" / "python").is_file():
+        venv.EnvBuilder(with_pip=True, clear=False).create(environment)
+    runtime_python = environment / "bin" / "python"
+    subprocess.run(
+        [str(runtime_python), "-m", "pip", "install", "--disable-pip-version-check", "-r", str(state_root / "requirements-updater.txt")],
+        check=True,
+        text=True,
+    )
+    if not python.is_file():
+        raise RuntimeError("the Python interpreter used for updater setup is unavailable")
+    return runtime_python
+
+
+def install(
+    *, home: Path, source_root: Path, codex: Path, python: Path = Path(sys.executable),
+    runner: Runner = subprocess.run, template: Path = TEMPLATE,
+) -> Path:
+    state_root = home / "Library" / "Application Support" / STATE_NAME
+    runtime_python = _ensure_runtime(source_root, state_root, python)
+    updater = state_root / "scripts" / "update_plugin.py"
+    agent = create_launch_agent(
+        home=home, python=runtime_python, updater=updater, codex=codex,
+        path_value=os.environ.get("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"),
+        codex_home=Path(os.environ.get("CODEX_HOME", str(home / ".codex"))), template=template,
+    )
+    launchctl("bootout", agent, uid=os.getuid(), runner=runner)
+    launchctl("bootstrap", agent, uid=os.getuid(), runner=runner)
+    if not agent_is_registered(uid=os.getuid(), runner=runner):
+        raise RuntimeError("LaunchAgent was written but launchd does not report it as registered")
+    return agent
+
+
+def uninstall(*, home: Path, runner: Runner = subprocess.run) -> None:
+    agent = home / "Library" / "LaunchAgents" / f"{LABEL}.plist"
+    launchctl("bootout", agent, uid=os.getuid(), runner=runner)
+    agent.unlink(missing_ok=True)
+    shutil.rmtree(home / "Library" / "Application Support" / STATE_NAME, ignore_errors=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("action", nargs="?", choices=("install", "status", "uninstall"), default="install")
     parser.add_argument("--codex", help="Codex CLI executable; otherwise discover it")
     args = parser.parse_args()
-    try:
-        codex = find_codex(args.codex)
-        updater = Path(__file__).resolve().with_name("update_plugin.py")
-        agent = create_launch_agent(
-            home=Path.home(),
-            python=Path(sys.executable),
-            updater=updater,
-            codex=codex,
-            path_value=os.environ.get("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"),
-        )
-    except (OSError, RuntimeError, plistlib.InvalidFileException) as exc:
-        print(f"Could not create updater LaunchAgent: {exc}", file=sys.stderr)
+    home = Path.home()
+    agent = home / "Library" / "LaunchAgents" / f"{LABEL}.plist"
+    if sys.platform != "darwin":
+        print("The automatic scheduler is currently supported on macOS only.", file=sys.stderr)
         return 1
-    print(f"Created {agent}")
-    print(f"Load it with: launchctl bootstrap gui/{os.getuid()} {agent}")
+    try:
+        if args.action == "status":
+            registered = agent_is_registered(uid=os.getuid())
+            print(f"Updater LaunchAgent: {'registered' if registered else 'not registered'} ({agent})")
+            return 0 if registered else 1
+        if args.action == "uninstall":
+            uninstall(home=home)
+            print("Updater LaunchAgent and its dedicated runtime were removed.")
+            return 0
+        codex = find_codex(args.codex)
+        agent = install(home=home, source_root=Path(__file__).resolve().parents[1], codex=codex)
+    except (OSError, RuntimeError, subprocess.CalledProcessError, plistlib.InvalidFileException) as exc:
+        print(f"Updater setup failed: {exc}", file=sys.stderr)
+        return 1
+    print(f"Updater installed and registered: {agent}")
     return 0
 
 

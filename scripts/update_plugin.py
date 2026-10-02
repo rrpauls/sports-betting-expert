@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -15,14 +16,15 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+try:
+    from .release_version import SEMVER_PATTERN
+except ImportError:  # Script execution from an extracted release package.
+    from release_version import SEMVER_PATTERN
+
 
 PLUGIN_NAME = "sports-betting-expert"
 REPOSITORY_URL = "https://github.com/rrpauls/sports-betting-expert.git"
-SEMVER = re.compile(
-    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
-    r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
-    r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
-)
+SEMVER = SEMVER_PATTERN
 
 
 def parse_version(value: str) -> tuple[tuple[int, int, int], tuple[tuple[int, Any], ...] | None]:
@@ -166,7 +168,133 @@ def validate_candidate(root: Path) -> None:
     ):
         raise RuntimeError("candidate skill frontmatter must define its name and description")
     run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"], cwd=root)
+    run([sys.executable, "scripts/build_release.py"], cwd=root)
     run([sys.executable, "scripts/validate_artifacts.py"], cwd=root)
+
+
+def payload_digest(root: Path) -> str:
+    """Hash installed release files, excluding Git metadata and generated build/cache output."""
+    required = (root / "plugin.json", root / ".codex-plugin" / "plugin.json")
+    if not all(path.is_file() for path in required):
+        raise RuntimeError(f"plugin payload is incomplete at {root}")
+    ignored = {".git", ".venv", "__pycache__", "dist"}
+    files = sorted(
+        path for path in root.rglob("*")
+        if path.is_file()
+        and not any(part in ignored for part in path.relative_to(root).parts)
+        and path.name != ".codex-marketplace-install.json"
+        and path.suffix != ".pyc"
+    )
+    digest = hashlib.sha256()
+    for path in sorted(set(files), key=lambda item: item.relative_to(root).as_posix()):
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        digest.update(len(relative).to_bytes(4, "big"))
+        digest.update(relative)
+        content = path.read_bytes()
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
+    return digest.hexdigest()
+
+
+def tracked_tree_digest(root: Path) -> str:
+    files = run(["git", "-C", str(root), "ls-files", "-z"], capture=True).stdout
+    digest = hashlib.sha256()
+    for name in sorted(item for item in files.split("\0") if item):
+        path = root / name
+        relative = name.encode("utf-8")
+        content = path.read_bytes()
+        digest.update(len(relative).to_bytes(4, "big"))
+        digest.update(relative)
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
+    return digest.hexdigest()
+
+
+def codex_cache_payload(marketplace_name: str, version: str) -> Path:
+    codex_home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).expanduser()
+    return codex_home / "plugins" / "cache" / marketplace_name / PLUGIN_NAME / version
+
+
+def pin_marketplace_plugin(root: Path, repository: str, revision: str) -> tuple[Path, bytes]:
+    """Temporarily replace the plugin's mutable ref with Codex's supported immutable SHA selector."""
+    path = root / ".agents" / "plugins" / "marketplace.json"
+    try:
+        original = path.read_bytes()
+        catalog = json.loads(original)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Git marketplace snapshot has no readable Codex marketplace manifest") from exc
+    matches = [
+        item for item in catalog.get("plugins", [])
+        if item.get("name") == PLUGIN_NAME
+        and isinstance(item.get("source"), dict)
+        and item["source"].get("source") == "url"
+        and repository_matches(item["source"].get("url"), repository)
+    ]
+    if len(matches) != 1:
+        raise RuntimeError("marketplace must contain exactly one root Git entry for this plugin")
+    source = matches[0]["source"]
+    source.pop("ref", None)
+    source["sha"] = revision
+    data = (json.dumps(catalog, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    _atomic_write(path, data)
+    return path, original
+
+
+def _atomic_write(path: Path, data: bytes) -> None:
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}-", delete=False) as stream:
+        temporary = Path(stream.name)
+        stream.write(data)
+    try:
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def restore_marketplace_manifest(path: Path, original: bytes) -> None:
+    _atomic_write(path, original)
+
+
+def verify_listed_payload(
+    codex: str, marketplace_name: str, version: str, expected_digest: str,
+    *, require_source_path: bool, installed_items: list[dict[str, Any]] | None = None,
+) -> None:
+    matches = [
+        item for item in (installed_items if installed_items is not None else load_installed(codex))
+        if item.get("marketplaceName") == marketplace_name and item.get("name") == PLUGIN_NAME
+    ]
+    installed = next((item for item in matches if item.get("version") == version), None)
+    if installed is None:
+        raise RuntimeError(f"Codex did not install {PLUGIN_NAME} {version} from {marketplace_name}")
+    source = installed.get("source") or {}
+    source_path = source.get("path")
+    if isinstance(source_path, str) and source_path:
+        reported_path = Path(source_path).resolve(strict=True)
+        if not reported_path.is_dir() or payload_digest(reported_path) != expected_digest:
+            raise RuntimeError("Codex installed source differs from the validated plugin bytes")
+    cache_version = "local" if source.get("source") == "local" else version
+    cached_path = codex_cache_payload(marketplace_name, cache_version)
+    if not cached_path.is_dir():
+        if require_source_path:
+            raise RuntimeError(f"Codex did not expose a verifiable installed cache at {cached_path}")
+        return
+    if payload_digest(cached_path) != expected_digest:
+        raise RuntimeError("Codex installed/cache payload differs from the validated plugin bytes")
+
+
+def refresh_updater_runtime(candidate: Path) -> None:
+    """Atomically replace the LaunchAgent's copied updater after a successful plugin update."""
+    runtime_script = Path(__file__).resolve()
+    runtime_dir = runtime_script.parent
+    for name in ("update_plugin.py", "release_version.py"):
+        source = candidate / "scripts" / name
+        target = runtime_dir / name
+        with tempfile.NamedTemporaryFile(dir=runtime_dir, prefix=f".{name}-", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(source.read_bytes())
+        try:
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 def refresh_local_archive(
@@ -222,6 +350,10 @@ def refresh_local_archive(
                 raise RuntimeError(
                     f"Codex did not refresh the local archive cache to {candidate_version}"
                 )
+            verify_listed_payload(
+                codex, marketplace_name, candidate_version, payload_digest(candidate),
+                require_source_path=True, installed_items=refreshed,
+            )
         except Exception as update_error:
             if target.exists():
                 shutil.rmtree(target)
@@ -237,6 +369,10 @@ def refresh_local_archive(
                     raise RuntimeError(
                         f"Codex did not restore the cached plugin to {installed_version}"
                     )
+                verify_listed_payload(
+                    codex, marketplace_name, installed_version, payload_digest(target),
+                    require_source_path=True, installed_items=restored,
+                )
             except Exception as rollback_error:
                 raise RuntimeError(
                     f"source restored, but cached plugin rollback failed: {rollback_error}"
@@ -293,20 +429,88 @@ def refresh_git_marketplace(
     candidate_version: str,
     candidate_revision: str,
     repository: str,
+    installed_version: str,
 ) -> None:
-    run([codex, "plugin", "marketplace", "upgrade", marketplace_name, "--json"])
-    snapshot, snapshot_revision = marketplace_snapshot(codex, marketplace_name, repository)
-    if snapshot_revision != candidate_revision:
-        raise RuntimeError(
-            "Git marketplace moved after candidate validation; no plugin was installed. "
-            "Retry the update check to validate the refreshed revision."
-        )
-    if read_candidate_version(snapshot, repository) != candidate_version:
-        raise RuntimeError("Git marketplace snapshot version does not match the validated candidate")
-    validate_candidate(snapshot)
-    if marketplace_snapshot(codex, marketplace_name, repository)[1] != candidate_revision:
-        raise RuntimeError("Git marketplace snapshot changed during validation; no plugin was installed")
-    run([codex, "plugin", "add", f"{PLUGIN_NAME}@{marketplace_name}", "--json"])
+    prior_root, prior_revision = marketplace_snapshot(codex, marketplace_name, repository)
+    prior_cache = codex_cache_payload(marketplace_name, installed_version)
+    if not prior_cache.is_dir():
+        raise RuntimeError(f"cannot preserve prior Codex plugin cache at {prior_cache}")
+    prior_payload_digest = payload_digest(prior_cache)
+    with tempfile.TemporaryDirectory(prefix="sports-betting-expert-marketplace-rollback-") as backup_dir:
+        prior_copy = Path(backup_dir) / "marketplace"
+        cache_copy = Path(backup_dir) / "plugin-cache"
+        shutil.copytree(prior_root, prior_copy, symlinks=True)
+        shutil.copytree(prior_cache, cache_copy, symlinks=True)
+        install_attempted = False
+        try:
+            run([codex, "plugin", "marketplace", "upgrade", marketplace_name, "--json"])
+            snapshot, snapshot_revision = marketplace_snapshot(codex, marketplace_name, repository)
+            if snapshot_revision != candidate_revision:
+                raise RuntimeError(
+                    "Git marketplace moved after candidate validation; no plugin was installed. "
+                    "Retry the update check to validate the refreshed revision."
+                )
+            if read_candidate_version(snapshot, repository) != candidate_version:
+                raise RuntimeError("Git marketplace snapshot version does not match the validated candidate")
+            validate_candidate(snapshot)
+            expected_tree_digest = tracked_tree_digest(snapshot)
+            if (
+                marketplace_snapshot(codex, marketplace_name, repository)[1] != candidate_revision
+                or tracked_tree_digest(snapshot) != expected_tree_digest
+            ):
+                raise RuntimeError("Git marketplace snapshot changed during validation; no plugin was installed")
+            manifest_path, manifest_backup = pin_marketplace_plugin(
+                snapshot, repository, candidate_revision
+            )
+            install_attempted = True
+            try:
+                run([codex, "plugin", "add", f"{PLUGIN_NAME}@{marketplace_name}", "--json"])
+            finally:
+                restore_marketplace_manifest(manifest_path, manifest_backup)
+            after_snapshot, after_revision = marketplace_snapshot(codex, marketplace_name, repository)
+            if after_revision != candidate_revision or tracked_tree_digest(after_snapshot) != expected_tree_digest:
+                raise RuntimeError("Codex marketplace source changed during installation")
+            verify_listed_payload(
+                codex, marketplace_name, candidate_version, payload_digest(snapshot),
+                require_source_path=True,
+            )
+        except Exception as update_error:
+            if not install_attempted:
+                raise
+            failed_root = prior_root.with_name(prior_root.name + ".failed-update")
+            try:
+                if failed_root.exists():
+                    shutil.rmtree(failed_root)
+                os.replace(prior_root, failed_root)
+                staging = prior_root.with_name(prior_root.name + ".rollback-staging")
+                shutil.copytree(prior_copy, staging, symlinks=True)
+                os.replace(staging, prior_root)
+                restored_revision = run(
+                    ["git", "-C", str(prior_root), "rev-parse", "HEAD"], capture=True
+                ).stdout.strip()
+                if restored_revision != prior_revision:
+                    raise RuntimeError("marketplace rollback did not restore the previous revision")
+                manifest_path, manifest_backup = pin_marketplace_plugin(
+                    prior_root, repository, prior_revision
+                )
+                try:
+                    run([codex, "plugin", "add", f"{PLUGIN_NAME}@{marketplace_name}", "--json"])
+                finally:
+                    restore_marketplace_manifest(manifest_path, manifest_backup)
+                if prior_cache.exists():
+                    shutil.rmtree(prior_cache)
+                prior_cache.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(cache_copy, prior_cache, symlinks=True)
+                verify_listed_payload(
+                    codex, marketplace_name, installed_version, prior_payload_digest,
+                    require_source_path=True,
+                )
+                shutil.rmtree(failed_root, ignore_errors=True)
+            except Exception as rollback_error:
+                raise RuntimeError(
+                    f"update failed ({update_error}); rollback of marketplace/source and Codex cache failed: {rollback_error}"
+                ) from update_error
+            raise
 
 
 def refresh(
@@ -342,6 +546,7 @@ def refresh(
             candidate_version,
             candidate_revision,
             repository,
+            str(installed.get("version", "")),
         )
     elif source.get("source") == "git":
         raise RuntimeError(
@@ -412,6 +617,7 @@ def main() -> int:
                     candidate_revision,
                     args.repository,
                 )
+            refresh_updater_runtime(candidate_root)
 
         updated = load_installed(args.codex)
         stale = [

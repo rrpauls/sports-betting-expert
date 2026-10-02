@@ -16,3 +16,22 @@ jobs:
       - run: python3 -m unittest discover -s tests -v
       - run: python3 scripts/build_release.py
       - run: python3 scripts/validate_artifacts.py
+      - name: Require a release version bump for distributed changes
+        if: github.event_name == 'pull_request' || github.event.before != '0000000000000000000000000000000000000000'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python3 scripts/check_version_bump.py --base-ref "$BASE_SHA"
+
+  macos-launchd:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python3 -m pip install -r requirements-updater.txt
+      - run: python3 -m unittest discover -s tests -v
+      - run: python3 scripts/build_release.py
+      - run: python3 scripts/validate_artifacts.py
+      - name: Verify a real per-user launchd bootstrap and bootout
+        run: bash scripts/verify_launchd_ci.sh

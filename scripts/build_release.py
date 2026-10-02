@@ -9,7 +9,10 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 
-VERSION = "1.0.2"
+try:
+    from .release_version import VERSION
+except ImportError:  # Script execution from a repository or extracted release root.
+    from release_version import VERSION
 PLUGIN_NAME = "sports-betting-expert"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILL_ROOT = REPO_ROOT / "skills" / PLUGIN_NAME
@@ -69,6 +72,7 @@ def build_codex_zip(output: Path) -> None:
         REPO_ROOT / "requirements-updater.txt",
         REPO_ROOT / "scripts" / "install_updater.py",
         REPO_ROOT / "scripts" / "update_plugin.py",
+        REPO_ROOT / "scripts" / "release_version.py",
         REPO_ROOT / "launchd" / "com.rrpauls.sports-betting-expert-updater.plist.in",
     ]
     with ZipFile(output, "w") as archive:
@@ -139,6 +143,14 @@ def write_checksums(outputs: list[Path]) -> None:
 
 def main() -> None:
     DIST.mkdir(exist_ok=True)
+    for old in DIST.glob(f"{PLUGIN_NAME}-*"):
+        if old.is_file() or old.is_symlink():
+            old.unlink()
+        elif old.is_dir():
+            import shutil
+
+            shutil.rmtree(old)
+    (DIST / "SHA256SUMS").unlink(missing_ok=True)
     outputs = [
         DIST / f"{PLUGIN_NAME}-skill-v{VERSION}.zip",
         DIST / f"{PLUGIN_NAME}-codex-v{VERSION}.zip",

@@ -4,13 +4,17 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path, PurePosixPath
 from zipfile import ZipFile
 
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
-VERSION = "1.0.2"
+try:
+    from .release_version import VERSION
+except ImportError:  # Script execution from a repository or extracted release root.
+    from release_version import VERSION
 NAME = "sports-betting-expert"
 
 
@@ -33,6 +37,10 @@ def validate_zip(path: Path, expected_prefix: str) -> None:
 
 
 def main() -> None:
+    root_manifest = json.loads((ROOT / "plugin.json").read_text(encoding="utf-8"))
+    codex_manifest = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    if root_manifest.get("version") != VERSION or codex_manifest.get("version") != VERSION:
+        raise ValueError("plugin.json and .codex-plugin/plugin.json must match the authoritative version")
     skill = DIST / f"{NAME}-skill-v{VERSION}.zip"
     codex = DIST / f"{NAME}-codex-v{VERSION}.zip"
     gemini = DIST / f"{NAME}-gemini-v{VERSION}.zip"
@@ -55,6 +63,7 @@ def main() -> None:
         required = {
             f"{updater_prefix}scripts/update_plugin.py",
             f"{updater_prefix}scripts/install_updater.py",
+            f"{updater_prefix}scripts/release_version.py",
             f"{updater_prefix}requirements-updater.txt",
             f"{updater_prefix}launchd/com.rrpauls.sports-betting-expert-updater.plist.in",
         }
