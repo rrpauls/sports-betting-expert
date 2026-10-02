@@ -99,14 +99,9 @@ def scheduler_status(platform: str, runner=subprocess.run) -> bool:
         try:
             root = ET.fromstring(result.stdout)
         except Exception as e:
-            print(f"DEBUG PARSE ERROR: {e}")
-            print(f"DEBUG STDOUT: {repr(result.stdout)}")
-            raise
+            raise RuntimeError(f"schtasks output could not be parsed: {e}")
         enabled = root.findtext(f'{{{NS}}}Settings/{{{NS}}}Enabled')
-        if enabled != 'true':
-            print(f"DEBUG ENABLED IS: {repr(enabled)}")
-            print(f"DEBUG XML: {result.stdout}")
-        return enabled == 'true'
+        return enabled in (None, 'true')
     raise RuntimeError(f'unsupported scheduler platform: {platform}')
 
 
